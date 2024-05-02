@@ -27,7 +27,7 @@ local_CSI_score <- function(data, nlev, j, parentnodes, ess = 1, kappa = .1) {
   } else {
 
     # optimal CSI-structure
-    res <- optimize_CSI_structure(data, nlev, j, parentnodes, ess = 1, kappa = .1)
+    res <- optimize_CSI_structure(data, nlev, j, parentnodes, ess = ess, kappa = kappa)
     
     # return penalized score
     r <- nlev[j]
