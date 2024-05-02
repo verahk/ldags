@@ -7,139 +7,50 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 ```
 
 This note test how the `BiDAG` package can be manipulated used to sample LDAGs. 
+Use the Asia network. 
 
 ```{r}
-
-```
-
-
-Define a small DAG with a local CSI 
-```{r cars}
-dag <- rbind(Z = c(0, 1, 1),
-             X = c(0, 0, 1),
-             Y = c(0, 0, 0))
-colnames(dag) <- rownames(dag)
-cpts <- setNames(vector("list", ncol(dag)), colnames(dag))
-levels <- rep(list(0:1), 3)
-names(levels) <- names(cpts)
-nlev <- lengths(levels)
-n <- length(nlev)
-
-
-cpts$Z <- array(c(.3, .7), 2, levels["Z"])
-cpts$X <- array(c(1/3, 2/3, .8, .2), c(2, 2), levels[c("X", "Z")])
-cpts$Y <- array(c(.1, .9, .1, .9, .1, .9, 2/3, 1/3), 
-                c(2, 2, 2), 
-                levels[c("Y", "Z", "X")])
-
-# Y indep of X given Z == 0 and indep of Z given X == 0
-cpts
-```
-
-Store as `bn.fit` object and sample data:
-```{r}
-g <- bnlearn::empty.graph(names(cpts))
-bnlearn::amat(g) <- dag
-bn <- bnlearn::custom.fit(g, cpts)
-
-df <- bnlearn::rbn(bn, 10000)
-data <- sapply(df, as.numeric) -1
-
-```
-
-
-Define a user-specified scoring function `usrDAGcorescore`. 
-Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
-
-```{r, file = "R/optimize_csi.R"}
-
-```
-
-```{r}
-
-library(BiDAG)
-assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
-```
-
-Define a `scoreparameters`-object for `BiDAG`'s MCMC functions. 
-Note that the level of each variable is added to the list of parameters. 
-I think this argument is used in the PC-algorithm-step, but it is not added when `type = "usr"`.
-```{r}
-scorepar <- scoreparameters("usr", 
-                         data = data,
-                         usrpar = list(pctesttype = "bdecat"))
-scorepar$Cvec <- nlev 
-
-fit <- partitionMCMC(scorepar, verbose = T, scoreout = T)
-unique(fit$traceadd$partitionscores)
-dags <- lapply(fit$traceadd$incidence, as.matrix)
-#fit <- sampleBN(scorepar, "orderiter")
-```
-
-```{r}
-Reduce("+", dags)/length(dags)
-```
-```{r}
-fit <- iterativeMCMC(scorepar, verbose = T, scoreout = T, 
-                     startspace = matrix(1, 3, 3) -diag(3))
-summary(fit)
-unique(unlist(fit$trace))
-fit$scoretable
-fit$DAG
-```
-
-MAP-dag: 
-```{r}
-fit$DAG
-```
-```{r}
-# compute observed P(Y|X, Z)
-counts <- table(df[, c("Y", "Z", "X")])
-counts/rep(colSums(counts), each = 2)
-
-# compute observed P(X|Z)
-counts <- table(df[, c("X", "Z", "Y")])
-counts/rep(colSums(counts), each = 2)
-
-usrDAGcorescore(2, 1, 3, scorepar)
-usrDAGcorescore(2, c(1, 3), 3, scorepar)
-
-usrDAGcorescore(3, integer(0), 3, scorepar)
-usrDAGcorescore(3, 1:2, 3, scorepar)
-```
-
-# Asia
-
-```{r}
-bn <- readRDS("simulations/asia.rds")
+here::i_am("./rmd/sample_ldags_with_BIDAG.Rmd")
+bn <- readRDS(here::here("./data/asia.rds"))
 df <- bnlearn::rbn(bn, 1000)
 data <- sapply(df, as.numeric) -1
 nlev <- sapply(df, nlevels)
-dmat <- bida:::descendants(bn
-                           )
+dmat <- bida:::descendants(bn)
 ```
 
-## sample labeled DAGs
+Define a score-function that can be used with `BiDAG`. 
+Need to assign this function to the namespace of the package, otherwise an internal function is called (..).
+```{r}
+library(BiDAG)
+usrDAGcorescore <- function(j, parentnodes, n, param) {
+  famscore_csi_from_data(param$data, nlev, j, parentnodes, ess = 1, kappa = .5)
+}
+assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+```
+
+Specify a `BiDAG::scoreparameters` for LDAGs and standard (discrete) DAGs.
 ```{r}
 scorepar <- list()
-scorepar$DAG <- scoreparameters("bdecat", 
-                          data = df,
-                          bdecatpar = list(chi = 1, edgepf = 1))
+
 scorepar$LDAG <- scoreparameters("usr", 
                          data = data,
                          usrpar = list(pctesttype = "bdecat"))
-scorepar$LDAG$Cvec <- nlev 
+scorepar$LDAG$Cvec <- nlev # required to run PC-algo with "bdecat" options, in search for initial search space.
 
-
+scorepar$DAG <- scoreparameters("bdecat", 
+                          data = df,
+                          bdecatpar = list(chi = 1, edgepf = 1))
 ```
 
-
-## convergence in terms of edge probs
+## Check convergence of MCMC-chain. 
+Run MCMC using the three algorithms `"order", "orderIter", "partition"` twice, and compare the resulting edge probabilities. True edges are marked in blue.
 ```{r}
 indx <- bnlearn::amat(bn) == 1
+par(mfrow = c(2, 3))
 for (x in c("DAG", "LDAG")) {
   for (algo in c("order", "orderIter", "partition")) {
   smpls <- replicate(2, sampleBN(scorepar[[x]], algo, verbose = F), simplify = FALSE)
@@ -149,7 +60,7 @@ for (x in c("DAG", "LDAG")) {
        main = paste0(x, " + ", algo))
   points(edgep[[1]][indx], edgep[[2]][indx], col = "blue")
   abline(a = 0, b = 1, col = "red")
-}
+  }
 }
 
 ```
@@ -157,8 +68,6 @@ for (x in c("DAG", "LDAG")) {
 
 
 ```{r}
-
-
 
 # replicate BIDAG::edgep for iterativeMCMC trace-add. 
 # Not sure why this include multiple lists with sampled DAGs..

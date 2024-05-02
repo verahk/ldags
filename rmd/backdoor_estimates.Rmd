@@ -1,0 +1,64 @@
+---
+title: 'Use BiDAG-package with user-defined score'
+author: "Vera Kvisgaard"
+date: "2024-04-25"
+output: 
+  html_document:
+  toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	results = "hold"
+)
+```
+
+```{r}
+# prep
+here::i_am("./rmd/backdoor_estimates.Rmd")
+files <- list.files(here::here("R"), ".R", full.names = T)
+sapply(files, source)
+```
+
+
+Load network and sample data
+```{r}
+bn <- readRDS(here::here("./data/asia.rds"))
+data <- bida:::sample_data_from_bn(bn, 100)
+```
+
+Run partition MCMC to obtain a sample of parent sets for each node. 
+
+Define a `scoreparameters`-object for `BiDAG`'s MCMC functions.
+Note that the level of each variable is added to the list of parameters. 
+I think this argument is used in the PC-algorithm-step, but it is not added when `type = "usr"`.
+```{r}
+
+library(BiDAG)
+scorepar <- scoreparameters("usr", 
+                         data = data,
+                         usrpar = list(pctesttype = "bdecat"))
+scorepar$Cvec <- nlev 
+```
+
+Define the user-specified scoring function that is to be called from `BiDAG`-functions.
+Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
+```{r,}
+#' See `scoretype` parameter in [BiDAG::scoreparameters].
+usrDAGcorescore <- function(j, parentnodes, n, param) {
+  local_CSI_score(param$data, nlev, j, parentnodes, ess = 1, kappa = .5)
+}
+
+assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+```
+```
+
+```{r}
+
+ps <- bida:::parent_support_from_dags()
+```
+
+

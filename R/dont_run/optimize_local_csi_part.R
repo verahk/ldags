@@ -22,24 +22,31 @@
 #' ess <- 1
 #' optimize_csi_part(counts, nlev, ess)
 #' 
-optimize_local_csi_part <- function(counts, nlev, ess = 1) {
+#' 
+#' counts <- structure(c(89L, 107L, 83L, 148L, 160L, 258L, 74L, 81L), dim = c(4L, 2L))
+#' nlev <- c(2, 2)
+
+
+
+
+optimize_local_csi_part <- function(counts, nlev, kappa, ess = 1, verbose = F) {
   q   <- nrow(counts)
   r   <- ncol(counts)
   
-  
-  conf <- expand.grid(lapply(nlev-1, seq.int, from = 0))
-  stride  <- c(1, cumprod(nlev[-length(nlev)]))
-  
   # init
-  S  <- uS <- seq_len(q)
+  S  <- uS <- letters[seq_len(q)] # seq_len(q)   # partition and list with regions
   nS <- rep(1, q)
-  scores <- famscore_bdeu_byrow(counts, ess, r, q, s = 1)
-  
+  scores <- famscore_bdeu_byrow(counts, ess, r, q, s = nS)
   while (length(uS) > 2) {
     
-    max_diff <- 0
+    max_diff <- kappa
     for (i in seq.int(1, length(uS)-1)) {
       for (j in seq.int(i+1, length(uS))) {
+        
+        # ad hoc check for regularity:
+        if (length(uS) < max(q/nlev +1)) {
+          
+        }
         tmp_counts <- counts[i,, drop = FALSE] + counts[j, , drop = FALSE]
         tmp_score <- famscore_bdeu_byrow(tmp_counts, ess, r, q, nS[i] + nS[j])
         diff <- tmp_score - (scores[i] + scores[j])
@@ -52,6 +59,7 @@ optimize_local_csi_part <- function(counts, nlev, ess = 1) {
       }
     }
     if (max_diff > 0) {
+      
       i <- collapse[1]
       j <- collapse[2]
       
@@ -59,14 +67,18 @@ optimize_local_csi_part <- function(counts, nlev, ess = 1) {
       counts[i, ] <- counts_collapsed
       scores[i]   <- score_collapsed
       
-      indx <- S %in% collapse
-      S[indx] <- i 
+      indx <- S %in% uS[collapse]
+      S[indx] <- uS[collapse][1]
+      
+      if (verbose) {
+        cat("\nscore improvement:", max_diff, "collapse regions:", uS[collapse], "new partition:", S)
+      }
+      
       
       uS <- uS[-j]
       nS <- nS[-j]
       counts <- counts[-j, , drop = FALSE]
       scores  <- scores[-j]
-      
       
     } else {
       break
@@ -77,5 +89,3 @@ optimize_local_csi_part <- function(counts, nlev, ess = 1) {
               partsize = nS,
               scores = scores))
 }
-
-# test: CSI-equivalence
