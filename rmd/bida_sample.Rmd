@@ -12,6 +12,8 @@ n <- 10
 nlev <- rep(2, n)
 dag <- matrix(0, n, n)
 colnames(dag) <- rownames(dag) <- paste0("X", seq_len(n))
+
+
 dag[1, 2:5] <- 1
 dag[2, c(3, 7)] <- 1
 dag[3, c(4, 7)] <- 1
@@ -36,7 +38,21 @@ labels[[7, 10]] <- rbind(c(1, NA, NA))
 labels[[8, 10]] <- rbind(c(1, NA, NA))
 labels[[9, 10]] <- rbind(c(1, NA, NA))
 
+
+g <- as(dag, "graphNEL")
+
+indx <- sapply(labels[dag == 1], is.null)
+prettify_lab <- function(x) {
+  tmp <- apply(x, 1, function(y) sprintf("(%s)",  paste(y, collapse = ",")))
+  sprintf("{%s}", paste(gsub("NA", "*", tmp), collapse = ","))
+}
+
+edgeAttr <- sapply(labels[dag == 1][!indx], prettify_lab)
+names(edgeAttr) <- Rgraphviz::edgeNames(g)[!indx]
+Rgraphviz::plot(g, edgeAttrs = list(label = edgeAttr))
+
 labels <- lapply(seq_len(n), function(i) labels[which(dag[, i] == 1), i])
+
 
 #for (i in 1:n) rand_cpt_array(dag, labels, nlev, i, 1, TRUE)
 
