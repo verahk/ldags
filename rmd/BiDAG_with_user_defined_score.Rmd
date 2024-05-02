@@ -23,7 +23,9 @@ here::i_am("./rmd/BiDAG_with_user_defined_score.Rmd")
 files <- list.files(here::here("R"), ".R", full.names = T)
 sapply(files, source)
 ```
-Define a Bayesian network over three nodes, a collider structure, where the CPT of the collider node $Y$ contains context-specific independence, i. e. a label on the one edge pointing into $Y$.
+Define a Bayesian network over three nodes, a collider structure, where the CPT of the collider node $Y$ contains context-specific independence, labels on the edges pointing into $Y$. 
+The distribution is designed to illustrate when labeled DAGs can help directing edges.
+With dependendence only in one single context, the direction is the of edges is hard to detect.
 ```{r}
 dag <- rbind(Z = c(0, 0, 1),
              X = c(0, 0, 1),
@@ -41,7 +43,7 @@ cpts$Z <- array(c(.5, .5), 2, levels["Z"])
 cpts$X <- array(c(.5, .5), 2, levels[c("X")])
 
 # encode some "weak" context-specific independence
-# Y is independent of Z given X = 0
+# Y is independent of Z given X = 0 and independent on X given Z = 0
 p <- .75
 cpts$Y <- array(c(rep(c(p, 1-p), 3), 1-p, p), 
                 c(2, 2, 2), 

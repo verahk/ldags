@@ -24,11 +24,78 @@ sapply(files, source)
 ```
 
 
+
 Load network and sample data
 ```{r}
-bn <- readRDS(here::here("./data/asia.rds"))
-data <- bida:::sample_data_from_bn(bn, 100)
+
+dag <- rbind(L  = c(0, 0, 1, 0, 1),
+             Z1 = c(0, 0, 0, 1, 0),
+             Z2 = c(0, 0, 0, 1, 0),
+             X  = c(0, 0, 0, 0, 1),
+             Y  = rep(0, 5))
+colnames(dag) <- rownames(dag)
+nlev <- rep(2, ncol(dag))
+Rgraphviz::plot(as(dag, "graphNEL"))
+
+labels <- vector("list", ncol(dag))
+labels[[4]] <- list(NULL, 0)
+labels[[5]] <- list(1, NULL) 
+
+bn <- rand_bn(dag, labels, nlev)
+bn
 ```
+
+```{r}
+
+
+x  <- 4
+yvars <- 5
+P <- labels_to_partition(labels[[4]], nlev[z])
+pa <- 2:3
+pa_min <- 3
+q <- prod(nlev[pa])
+    
+dims <- list(iter = 1:10, 
+             N = 10**c(1:4))
+rmse <- array(list(), dim = lengths(dims), dimnames = dims)
+kl   <- function(p, q) sum(p*(log(p)-log(q)))
+for (i in seq_along(dims$iter)) {
+  set.seed(i)
+  bn <- rand_bn(dag, labels, nlev)
+  pdo  <- bida:::interv_probs_x_bn(bn, x, yvars, bida:::descendants(bn))[[1]]
+  pyxz <- bida:::cpquery_from_cpt_arrays(bida:::cpt_arrays_from_bn(bn), yvars, c(x, pa))
+  diff <- pdo[2, 2]-pdo[1, 2]
+  for (j in seq_along(dims$N)) {
+  
+    N <- dims$N[j]
+    set.seed(i+N)
+    data <- bida:::sample_data_from_bn(bn, N)
+
+    pairs <- list(part = bida_pairs_local_csi(data, rbind(pa), 1, x, yvars, P, ess = 1, kappa = .5)[[1]],
+                  full = bida_pairs_local_csi(data, rbind(pa), 1, x, yvars, as.list(seq_len(q)-1), ess = 1, kappa = .5)[[1]],
+                  min  = bida_pairs_local_csi(data, rbind(pa_min), 1, x, yvars, NULL, ess = 1, kappa = .5)[[1]])
+    
+    means_obs <- lapply(lapply(pairs, "[[", "params"),
+                        function(x) sweep(x[[1]]+1/length(x[[1]]), 2:3, colSums(x[[1]])+nlev[yvars]/length(x[[1]]),  "/")) 
+    
+    means <- lapply(pairs, bida:::posterior_mean)
+    rmse[[i, j]]  <- sapply(means, function(x) sqrt(mean((x-pdo)**2)))
+    #rmse[[i, j]] <- sapply(means, function(x) kl(pdo, x))  
+  }
+}
+
+
+library(ggplot2)
+library(dplyr)
+df <- cbind(expand.grid(dims), do.call("rbind", rmse))
+df %>% 
+  tidyr::pivot_longer(names(pairs)) %>% 
+  mutate(N = factor(N, sort(unique(N)))) %>% 
+  ggplot(aes(N, value, color = name)) +
+  #facet_wrap(N~., scales = "free") +
+  geom_boxplot()
+```
+
 
 Run partition MCMC to obtain a sample of parent sets for each node. 
 
@@ -36,7 +103,6 @@ Define a `scoreparameters`-object for `BiDAG`'s MCMC functions.
 Note that the level of each variable is added to the list of parameters. 
 I think this argument is used in the PC-algorithm-step, but it is not added when `type = "usr"`.
 ```{r}
-
 library(BiDAG)
 scorepar <- scoreparameters("usr", 
                          data = data,

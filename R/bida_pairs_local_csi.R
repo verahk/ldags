@@ -14,7 +14,7 @@ new_bida_pair_cat <- function(x, y, params, support, zerosupp, nlev, ess) {
 }
 
 
-bida_pairs_local_csi <- function(data, sets, support, x, yvars, ess, kappa) {
+bida_pairs_local_csi <- function(data, sets, support, x, yvars, P, ess, kappa) {
  
   counts <- matrix(list(), nrow = length(support), ncol = length(yvars))
   seqy <- seq_along(yvars)
@@ -47,7 +47,10 @@ bida_pairs_local_csi <- function(data, sets, support, x, yvars, ess, kappa) {
       }
     } else {
       
-      P <- optimize_CSI_structure(data, nlev, x, z, ess, kappa)$partition
+      if (is.null(P)) {
+        P <- optimize_CSI_structure(data, nlev, x, z, ess, kappa)$partition
+      }
+      
       npart <- length(P)
       p <- observed_partition(P, data[, z], nlev[z])
       
