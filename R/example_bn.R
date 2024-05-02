@@ -22,7 +22,7 @@ example_bn <- function() {
                     c(2, 2, 2), 
                     levels[c("Y", "Z", "X")])
     cpts
-  } else if (name = "minimal_parent") {
+  } else if (name == "minimal_parent") {
     dag <- rbind(L  = c(0, 1, 1, 0, 1),
                  Z1 = c(0, 0, 0, 1, 0),
                  Z2 = c(0, 0, 0, 1, 0),

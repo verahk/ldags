@@ -385,18 +385,30 @@ sapply(files, source)</code></pre>
 ##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/is_valid_partition.R
 ## value   ?                                                                         
 ## visible FALSE                                                                     
+##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/labels_to_partition.R
+## value   ?                                                                          
+## visible FALSE                                                                      
 ##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/local_CSI_score.R
 ## value   ?                                                                      
 ## visible FALSE                                                                  
 ##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/optimize_CSI_structure.R
 ## value   NULL                                                                          
 ## visible FALSE                                                                         
+##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/rand_bn.R
+## value   ?                                                              
+## visible FALSE                                                          
+##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/rand_cpt_array.R
+## value   ?                                                                     
+## visible FALSE                                                                 
 ##         /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags/R/utils.R
 ## value   ?                                                            
 ## visible FALSE</code></pre>
 <p>Define a Bayesian network over three nodes, a collider structure,
 where the CPT of the collider node <span class="math inline">\(Y\)</span> contains context-specific independence,
-i. e. a label on the one edge pointing into <span class="math inline">\(Y\)</span>.</p>
+labels on the edges pointing into <span class="math inline">\(Y\)</span>. The distribution is designed to
+illustrate when labeled DAGs can help directing edges. With
+dependendence only in one single context, the direction is the of edges
+is hard to detect.</p>
 <pre class="r"><code>dag &lt;- rbind(Z = c(0, 0, 1),
              X = c(0, 0, 1),
              Y = c(0, 0, 0))
@@ -413,7 +425,7 @@ cpts$Z &lt;- array(c(.5, .5), 2, levels[&quot;Z&quot;])
 cpts$X &lt;- array(c(.5, .5), 2, levels[c(&quot;X&quot;)])
 
 # encode some &quot;weak&quot; context-specific independence
-# Y is independent of Z given X = 0
+# Y is independent of Z given X = 0 and independent on X given Z = 0
 p &lt;- .75
 cpts$Y &lt;- array(c(rep(c(p, 1-p), 3), 1-p, p), 
                 c(2, 2, 2), 

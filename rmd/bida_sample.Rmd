@@ -1,0 +1,241 @@
+
+
+```{r}
+# prep
+here::i_am("./rmd/backdoor_estimates.Rmd")
+files <- list.files(here::here("R"), ".R", full.names = T)
+sapply(files, source)
+```
+
+```{r}
+n <- 10
+nlev <- rep(2, n)
+dag <- matrix(0, n, n)
+colnames(dag) <- rownames(dag) <- paste0("X", seq_len(n))
+dag[1, 2:5] <- 1
+dag[2, c(3, 7)] <- 1
+dag[3, c(4, 7)] <- 1
+dag[4, c(5, 7, 8)] <- 1
+dag[5, c(9)] <- 1
+dag[6, c(7, 10)] <- 1
+dag[7, c(8, 10)] <- 1
+dag[8, c(5, 9, 10)] <- 1
+dag[9, c(10)] <- 1
+
+labels <- matrix(list(), n, n)
+labels[[2, 3]] <- rbind(0)
+labels[[1, 4]] <- rbind(1)
+labels[[4, 5]] <- rbind(c(0, NA))
+labels[[8, 5]] <- rbind(c(0, NA))
+labels[[2, 7]] <- rbind(c(1, 1, 0))
+labels[[3, 7]] <- rbind(c(0, 1, 1), c(1, NA, 1))
+labels[[4, 7]] <- rbind(c(1, 1, NA))
+labels[[6, 7]] <- rbind(c(1, 1, NA))
+labels[[5, 9]] <- rbind(1)
+labels[[7, 10]] <- rbind(c(1, NA, NA))
+labels[[8, 10]] <- rbind(c(1, NA, NA))
+labels[[9, 10]] <- rbind(c(1, NA, NA))
+
+labels <- lapply(seq_len(n), function(i) labels[which(dag[, i] == 1), i])
+
+#for (i in 1:n) rand_cpt_array(dag, labels, nlev, i, 1, TRUE)
+
+
+```
+
+
+# Known structure
+```{r}
+
+dmat <- bida:::descendants(dag)
+y <- 10
+ess <- 1 
+
+dims <- list(r = 1:10,
+             N = 10**c(1:4),
+             x = 1:9)
+
+rmse <- array(list(), lengths(dims), dims)
+
+for (r in dims$r) {
+  bn <- rand_bn(dag, labels, nlev, alpha = 1)
+  pdos <- bida:::interv_probs_from_bn(bn, "exact")[, 10]
+
+  for (NN in seq_along(dims$N)) {
+    N <- dims$N[NN]
+    data <- bida:::sample_data_from_bn(bn, N)
+    for (x in dims$x) {
+  
+      pairs <- list()
+      pa <- which(dag[, x] == 1)
+      
+      if (length(pa) > 1) {
+        # partition
+        P  <- labels_to_partition(labels[[x]], nlev[pa])
+        pairs$part <- bida_pairs_local_csi(data, nlev, x, y, rbind(pa), 1, list(P), ess, kappa = NULL)[[1]]
+        
+        
+        # full CPT
+        q  <- prod(nlev[pa])
+        pairs$full <- bida_pairs_local_csi(data, nlev, x, y, rbind(pa), 1, "none", ess, kappa = NULL)[[1]]
+      } else {
+        # full CPT
+        q  <- prod(nlev[pa])
+        pairs$full <- bida_pairs_local_csi(data, nlev, x, y, rbind(pa), 1,  "none", ess, kappa = NULL)[[1]]
+        pairs$part <- pairs$full
+      }
+      
+      pairs$bida <- bida:::bida_pair_cat(data, x, y, rbind(pa), 1, nlev, ess)
+      pairs <- pairs[c("part", "full", "bida")]
+      
+      P0 <- 1/prod(nlev[c(x, y, pa)])
+      #stopifnot(all(pairs$bida$params[[1]] + ess*P0 == pairs$full$params[[1]]))
+      
+      means <- lapply(pairs, bida:::posterior_mean)
+      #stopifnot(all(means$bida == means$full))
+      
+      tmp <- sapply(means, function(t) sqrt(mean((t-pdos[[x]])**2)))
+      #stopifnot(all(tmp["bida"] == tmp["full"]))
+            
+      rmse[[r, NN, x]]  <- tmp
+    }
+  }
+}
+
+library(ggplot2)
+library(dplyr)
+
+df <- cbind(expand.grid(dims), do.call(rbind, rmse))
+plot(df[, "bida"], df[, "full"])
+
+df %>% 
+  tidyr::pivot_longer(names(pairs)) %>% 
+  mutate(N = factor(N, sort(unique(N)))) %>% 
+  ggplot(aes(N, value, color = name)) +
+  facet_grid(.~x, scales = "free") +
+  geom_boxplot()
+
+```
+
+
+
+
+
+
+# Unknown structure
+
+Specify a `BiDAG::scoreparameters` for LDAGs and standard (discrete) DAGs.
+```{r}
+library(BiDAG)
+ess <- 1
+kappa <- .5
+```
+
+Define the user-specified scoring function that is to be called from `BiDAG`-functions.
+Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
+```{r,}
+#' See `scoretype` parameter in [BiDAG::scoreparameters].
+usrDAGcorescore <- function(j, parentnodes, n, param) {
+  local_CSI_score(param$data, nlev, j, parentnodes, ess = ess, kappa = kappa)
+}
+assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+```
+
+
+```{r}
+
+dmat <- bida:::descendants(dag)
+y <- 10
+
+
+dims <- list(r = 2:10,
+             N = 10**c(1:4),
+             model = c("DAG", "LDAG"),
+             x = 1:9)
+
+rmse <- array(list(), lengths(dims), dims)
+edgep <- ancp <- array(list(), lengths(dims[1:3]), dims[1:3])
+
+burnin <- seq_len(200)
+for (r in dims$r) {
+  set.seed(r)
+  bn <- rand_bn(dag, labels, nlev, alpha = 1)
+  pdos <- bida:::interv_probs_from_bn(bn, "exact")[, 10]
+
+  for (NN in seq_along(dims$N)) {
+    N <- dims$N[NN]
+    set.seed(r+N)
+    data <- bida:::sample_data_from_bn(bn, N)
+    
+    for (m in dims$model) {
+      cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
+    
+      
+      if (m == "DAG") {
+        scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
+      } else {
+        scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
+        scorepar$Cvec <- nlev
+      }
+      tic <- Sys.time()
+      iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
+      print(Sys.time()-tic)
+      smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
+      print(Sys.time()-tic)
+      
+      filename <- sprintf("%s_N%s_r%02.0f.rds", m, N, r)
+      saveRDS(list(bn, iterfit, smpl), here::here("./MCMCchains/", filename))
+      
+      dags <- lapply(smpl$traceadd$incidence[-burnin], as.matrix)
+      u    <- unique(dags)
+      support  <- bida:::rowsum_fast(rep(1/length(dags), length(dags)), dags, u)
+      dags <- u 
+      
+      ps   <- bida:::parent_support_from_dags(dags, support)
+      dmats <- lapply(dags, bida:::descendants)
+      
+      edgep[[r, NN, m]] <- Reduce("+", Map("*", dmats, support))
+      ancp[[r, NN, m]]  <- Reduce("+", Map("*", dmats, support))
+        
+      for (x in dims$x) {
+        pairs <- list() 
+        pairs$part <- bida_pairs_local_csi(data, nlev, x, y, ps$sets[[x]], ps$support[[x]], "opt", ess, kappa = kappa)[[1]]
+        pairs$full <- bida_pairs_local_csi(data, nlev, x, y, ps$sets[[x]], ps$support[[x]], "none", ess, kappa = kappa)[[1]]
+        pairs$bida <- bida:::bida_pair_cat(data, x, y, ps$sets[[x]], ps$support[[x]], nlev, ess)
+        
+     
+        
+        means <- lapply(pairs, bida:::posterior_mean)
+        stopifnot(means$full==means$bida)
+        #check 
+        if (FALSE) {
+           means$full 
+           means$bida
+           stopifnot(all(lengths(pairs$bida$params) == lengths(pairs$full$params)))
+ 
+           for (z in seq_along(ps$sets[[x]])) {
+              pa <- ps$sets[[x]][z, ]
+              pa <- pa[!is.na(pa)]
+              P0 <- 1/prod(nlev[c(x, y, pa)])
+              stopifnot(all(pairs$bida$params[[1]] + ess*P0 == pairs$full$params[[1]]))
+           }
+        }
+       
+        rmse[[r, NN, m, x]]  <- sapply(means, function(t) sqrt(mean((t-pdos[[x]])**2)))
+      }
+    }
+  }
+}
+
+library(ggplot2)
+library(dplyr)
+df <- cbind(expand.grid(dims)[!sapply(rmse, is.null), ], do.call("rbind", rmse))
+df %>% 
+  tidyr::pivot_longer(names(pairs)) %>% 
+  mutate(N = factor(N, sort(unique(N)))) %>% 
+  ggplot(aes(N, value, color = name)) +
+  facet_grid(model~x, scales = "free") +
+  geom_boxplot()
+
+```
+

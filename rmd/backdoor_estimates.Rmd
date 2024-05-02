@@ -55,12 +55,11 @@ pa <- 2:3
 pa_min <- 3
 q <- prod(nlev[pa])
     
-dims <- list(iter = 1:10, 
+dims <- list(iter = 1:30, 
              N = 10**c(1:4))
 rmse <- array(list(), dim = lengths(dims), dimnames = dims)
 kl   <- function(p, q) sum(p*(log(p)-log(q)))
 for (i in seq_along(dims$iter)) {
-  set.seed(i)
   bn <- rand_bn(dag, labels, nlev)
   pdo  <- bida:::interv_probs_x_bn(bn, x, yvars, bida:::descendants(bn))[[1]]
   pyxz <- bida:::cpquery_from_cpt_arrays(bida:::cpt_arrays_from_bn(bn), yvars, c(x, pa))
@@ -68,7 +67,6 @@ for (i in seq_along(dims$iter)) {
   for (j in seq_along(dims$N)) {
   
     N <- dims$N[j]
-    set.seed(i+N)
     data <- bida:::sample_data_from_bn(bn, N)
 
     pairs <- list(part = bida_pairs_local_csi(data, rbind(pa), 1, x, yvars, P, ess = 1, kappa = .5)[[1]],
@@ -95,36 +93,4 @@ df %>%
   #facet_wrap(N~., scales = "free") +
   geom_boxplot()
 ```
-
-
-Run partition MCMC to obtain a sample of parent sets for each node. 
-
-Define a `scoreparameters`-object for `BiDAG`'s MCMC functions.
-Note that the level of each variable is added to the list of parameters. 
-I think this argument is used in the PC-algorithm-step, but it is not added when `type = "usr"`.
-```{r}
-library(BiDAG)
-scorepar <- scoreparameters("usr", 
-                         data = data,
-                         usrpar = list(pctesttype = "bdecat"))
-scorepar$Cvec <- nlev 
-```
-
-Define the user-specified scoring function that is to be called from `BiDAG`-functions.
-Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
-```{r,}
-#' See `scoretype` parameter in [BiDAG::scoreparameters].
-usrDAGcorescore <- function(j, parentnodes, n, param) {
-  local_CSI_score(param$data, nlev, j, parentnodes, ess = 1, kappa = .5)
-}
-
-assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
-```
-```
-
-```{r}
-
-ps <- bida:::parent_support_from_dags()
-```
-
 

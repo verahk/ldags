@@ -21,30 +21,31 @@
 #' 
 #' # CSI-consistent partition
 #' P <- list(c(0, 1, 3), 2)
-#' is_valid_partition(P, levels, verbose = T)
+#' is_valid_partition(P, levels, verbose = T) == TRUE
 #' 
 #' # not CSI-consistent partition
 #' P <- list(c(0, 3), 2, 1)
-#' is_valid_partition(P, levels, verbose = T)
+#' is_valid_partition(P, levels, verbose = T) == FALSE
 #' 
 #' # CSI-consistent, but not regular
 #' P <- list(c(0, 1), c(2, 3))
-#' is_valid_partition(P, levels, verbose = T)
+#' is_valid_partition(P, levels, verbose = T) == FALSE
 #' P <- list(c(0, 2), c(1, 3))
-#' is_valid_partition(P, levels, verbose = T)
-is_valid_partition <- function(P, levels, check_regularity = TRUE, verbose = FALSE) {
+#' is_valid_partition(P, levels, verbose = T) == FALSE
+is_valid_partition <- function(P, levels, nlev = lengths(levels), check_regularity = TRUE, verbose = FALSE) {
   n    <- length(levels)
-  nlev <- lengths(levels)
+  seqn <- seq_len(n)
   stride <- c(1, cumprod(nlev[-length(n)]))
-  seqn <- seq_along(stride)
-  lens    <- lengths(P)
-  
+ 
   # for tracking which partitions that includes all levels of each variable
   includes_all_lev <- matrix(FALSE, nrow = length(P), ncol = n)
-
-  for (j in seq_along(P)[lens > 0]) {
+  
+  for (j in seq_along(P)[lengths(P) > 1]) {
     p <- P[[j]]
-    K <- p[[1]]
+    #vals <- t(vapply(p, function(pp) (pp%/%stride)%%nlev, vector("numeric", n)))
+    #first_rows <- rep(p, n)-stride*vals
+    K <- list()
+    
     for (pp in p) {
       
       # configuration of nodes in the current context 
@@ -52,6 +53,7 @@ is_valid_partition <- function(P, levels, check_regularity = TRUE, verbose = FAL
       
       # the corresponding rows, setting each value to 0
       first_row <- pp-stride*vals
+      
       for (i in seqn) {
         
         # list rows where the config of the co-parents of i 
@@ -61,19 +63,21 @@ is_valid_partition <- function(P, levels, check_regularity = TRUE, verbose = FAL
         rows <- first_row[i] + stride[i]*levels[[i]]
         
         if (all(rows %in% p)) {
-          K <- unique(c(K, rows))
+          #print(i)
+          K <- c(K, list(rows))
           includes_all_lev[j, i] <- TRUE
         }
       }
     }
     
+    K <- unique(unlist(K))
     if ( !(length(K) == length(p)) || !all(p == K) ) {
       if (verbose) cat("P is not CSI-consistent\n")
       return(FALSE)
     } 
   }
   
-  if (check_regularity && all(lens >= min(nlev)) && any(colMeans(includes_all_lev) == 1)) {
+  if (check_regularity && length(P) <= max(nlev) && any(colMeans(includes_all_lev) == 1)) {
     if (verbose) cat("P is not regular\n")
     return(FALSE)
   } else {

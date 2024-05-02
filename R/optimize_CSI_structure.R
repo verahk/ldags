@@ -15,7 +15,7 @@
 #' @export
 #'
 #' @examples
-optimize_CSI_structure <- function(data, nlev, j, parentnodes, ess = 1, kappa = .1) {
+optimize_CSI_structure <- function(data, nlev, j, parentnodes, ess = 1, kappa = .1, verbose = FALSE) {
   
   r <- nlev[j]
   q <- prod(nlev[parentnodes])
@@ -28,7 +28,7 @@ optimize_CSI_structure <- function(data, nlev, j, parentnodes, ess = 1, kappa = 
   # optimize CSI-structure
   P <- as.list(seq.int(0, q-1))
   levels <- lapply(nlev[parentnodes]-1, seq.int, from = 0)
-  optimize_CSI_structure_greedy(counts, levels, P, ess = ess, lkappa = log(kappa))
+  optimize_CSI_structure_greedy(counts, levels, nlev, P, ess = ess, lkappa = log(kappa), verbose = verbose)
 }
 
 
@@ -47,7 +47,7 @@ optimize_CSI_structure <- function(data, nlev, j, parentnodes, ess = 1, kappa = 
 #' counts <- cbind(c(10, 20, 30, 40), rep(10, 4))
 #' P <- as.list(seq_len(nrow(counts))-1)
 #' optimize_CSI_structure_greedy(counts, levels, P, ess = 1, lkappa = 0, verbose = T)
-optimize_CSI_structure_greedy <- function(counts, levels, P, ess, lkappa, verbose = FALSE){
+optimize_CSI_structure_greedy <- function(counts, levels, nlev = lengths(levels), P, ess, lkappa, verbose = FALSE){
   
   q   <- nrow(counts)
   r   <- ncol(counts)
@@ -69,7 +69,7 @@ optimize_CSI_structure_greedy <- function(counts, levels, P, ess, lkappa, verbos
         PP[j] <- NULL
         
         # check if collapsing part i and j result in regular, CSI-consistent partition
-        if (!is_valid_partition(PP, levels, verbose = FALSE))  next
+        if (!is_valid_partition(PP, levels, nlev, verbose = F))  next
         
         
         # compute score of collapsed parts
@@ -92,7 +92,7 @@ optimize_CSI_structure_greedy <- function(counts, levels, P, ess, lkappa, verbos
     
   if (keep_climb) {
     if (verbose) cat("\nbest partition:", unlist_partition(best_partition))
-    optimize_CSI_structure_greedy(counts, levels, best_partition, ess, lkappa, verbose)
+    optimize_CSI_structure_greedy(counts, levels, nlev, best_partition, ess, lkappa, verbose)
   } else {
     return(list(partition = P, scores = part_scores))
   }
@@ -103,20 +103,29 @@ optimize_CSI_structure_greedy <- function(counts, levels, P, ess, lkappa, verbos
 ### test ----
 if (FALSE) {
   levels <- rep(list(0:1), 3)
+  nlev <- lengths(levels)
   q <- prod(lengths(levels))
   P <- as.list(seq_len(q)-1)
   
   ##  same proportion, different counts
   counts <- matrix(seq(10, 80, length.out = q), nrow = q, ncol = 2)
   counts 
-  res <- optimize_CSI_structure_greedy(counts, levels, P, 1, 0, verbose = T)
+  res <- optimize_CSI_structure_greedy(counts, levels, nlev, P, 1, 0, verbose = T)
   # regions with high support are combined first. 
   
   ## different proportion, same counts
   prop <- c(.5, .4, .3, .2, .1, .05, .025, .01)
   prop <- cbind(prop, 1-prop)
-  res <- optimize_CSI_structure_greedy(prop*10, levels, P, 1, 0, verbose = T)
-  res <- optimize_CSI_structure_greedy(prop*100, levels, P, 1, 0, verbose = T)
-  res <- optimize_CSI_structure_greedy(prop*1000, levels, P, 1, 0, verbose = T)
+  res <- optimize_CSI_structure_greedy(prop*10, levels, nlev, P, 1, 0, verbose = T)
+  res <- optimize_CSI_structure_greedy(prop*100, levels, nlev, P, 1, 0, verbose = T)
+  res <- optimize_CSI_structure_greedy(prop*1000, levels, nlev, P, 1, 0, verbose = T)
   # larger sample size, less willing to fuse parts
+  
+}
+
+if (FALSE) {
+  
+  j <- 10 
+  parentnodes <- 1:6 #match(bn[[j]]$parents, names(bn))
+  profvis::profvis(optimize_CSI_structure(data, nlev, 10, parentnodes, verbose = T))
 }

@@ -26,15 +26,16 @@ labels_to_partition <- function(labels, nlev) {
   lev <- lapply(nlev-1, seq.int, from = 0)
   
   for (i in seq_along(labels)[lengths(labels) > 0]) {
-    for (r in 1:NROW(labels[[i]])) {
-      context <- label[[i]][r, ]
+    for (r in 1:nrow(labels[[i]])) {
+      context <- labels[[i]][r, ]
       isna <-  is.na(context)
-      rows0 <- c(context[!isna]%*%stride[-i][!isna])
+      rows0 <- c(context[!isna]%*%stride[-i][!isna]) +1
       
       vars  <- c(i, seqn[-i][isna])
       rows  <- rows0 + bida:::expand_grid_fast(lev[vars])%*%stride[vars]
       
-      part[rows+1] <- part[rows0+1]
+      indx <- part %in% part[rows]
+      part[indx] <- part[rows0]
     }
   }
   
