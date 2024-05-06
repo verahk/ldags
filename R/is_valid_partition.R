@@ -1,6 +1,9 @@
 
 
-#' Test a partition for CSI consistency  and regularity
+#' Test a partition for CSI consistency and regularity
+#'
+#' CSI-consistency: No part in $P$ includes 
+#' Regularity: All levels 
 #'
 #' @param P (list of integer vectors) 
 #'  a partition of the outcome space defined by `levels`.

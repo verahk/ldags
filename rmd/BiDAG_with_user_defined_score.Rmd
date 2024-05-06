@@ -1,10 +1,9 @@
 ---
 title: 'Use BiDAG-package with user-defined score'
 author: "Vera Kvisgaard"
-date: "2024-04-25"
 output: 
   html_document:
-  toc: true
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -17,20 +16,29 @@ knitr::opts_chunk$set(
 ```
 
 This note shows how the `BiDAG` package can be manipulated used to learn labeled DAGs. 
-```{r prep}
+```{r prep, message=FALSE}
+library(pcalg)
+library(BiDAG)
+
 # prep
 here::i_am("./rmd/BiDAG_with_user_defined_score.Rmd")
 files <- list.files(here::here("R"), ".R", full.names = T)
 sapply(files, source)
 ```
+
+## Define netowrk with context-specific independencies
 Define a Bayesian network over three nodes, a collider structure, where the CPT of the collider node $Y$ contains context-specific independence, labels on the edges pointing into $Y$. 
-The distribution is designed to illustrate when labeled DAGs can help directing edges.
-With dependendence only in one single context, the direction is the of edges is hard to detect.
 ```{r}
 dag <- rbind(Z = c(0, 0, 1),
              X = c(0, 0, 1),
              Y = c(0, 0, 0))
 colnames(dag) <- rownames(dag)
+Rgraphviz::plot(as(dag, "graphNEL"))
+```
+
+The distribution is designed to illustrate when labeled DAGs can help directing edges.
+With dependendence only in one single context, the direction is the of edges is hard to detect.
+```{r}
 
 cpts <- setNames(vector("list", ncol(dag)), colnames(dag))
 levels <- rep(list(0:1), 3)
@@ -73,21 +81,25 @@ Define routine for computing the local score of a LDAG-node:
 
 ```
 
+### Result of `optimize_CSI_structure`:
+The function returns the optimal partition and each parts contribution to the score of the local distribution.
+```{r}
+cat("Optimized CSI-structure:\n")
+optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = .5)
+sum(optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = .5)$scores)
+
+cat("Full CPT:\n")
+optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = 0)
+sum(optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = 0)$scores)
+```
+
 Check score of node `Y` with different parent sets:
 ```{r}
-
 cat("Local scores:\n")
 local_CSI_score(data, nlev, 3, integer(0), ess = 1, kappa = .5)
 local_CSI_score(data, nlev, 3, 1, ess = 1, kappa = .5)
 local_CSI_score(data, nlev, 3, 2, ess = 1, kappa = .5)
 local_CSI_score(data, nlev, 3, 1:2, ess = 1, kappa = .5)
-
-cat("Local score of full CPT:\n")
-sum(optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = 0)$scores)
-
-cat("Optimized CSI-structure:\n")
-optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = .5)
-
 ```
 
 Check observed sample proportions
@@ -131,14 +143,19 @@ Run iterativeMCMC:
 iterativefit <- learnBN(scorepar, algorithm = "orderIter", scoreout = T, verbose = T)
 plot(unlist(iterativefit$trace), type = "l")
 summary(iterativefit)
-iterSpace <- getSpace(iterativefit)
+```
 
+
+```{r}
+tab <- getSpace(iterativefit)
+tab$tables[[1]]
+```
+
+```{r}
 cat("\n MAP DAG and score")
 iterativefit$DAG
 iterativefit$score
 ```
-PC-skeleton include all edges in this case.
-
 
 Compare score of MAP-dag with that given by user-defined function:
 ```{r}

@@ -1,0 +1,354 @@
+---
+title: 'Run approx BIDA with labeled DAGs'
+author: "Vera Kvisgaard"
+output: 
+  html_document:
+  toc: true
+---
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+library(pcalg)
+library(BiDAG)
+
+
+here::i_am("./rmd/run_BIDA_with_LDAGs.Rmd")
+# source functions from file
+files <- list.files(here::here("R"), ".R", full.names = T)
+sapply(files, source)
+
+verbose <- FALSE
+runMCMC <- FALSE
+```
+
+Define underlying labeled DAG
+```{r}
+n <- 10
+nlev <- rep(2, n)
+dag <- matrix(0, n, n)
+colnames(dag) <- rownames(dag) <- paste0("X", seq_len(n))
+
+
+dag[1, 2:5] <- 1
+dag[2, c(3, 7)] <- 1
+dag[3, c(4, 7)] <- 1
+dag[4, c(5, 7, 8)] <- 1
+dag[5, c(9)] <- 1
+dag[6, c(7, 10)] <- 1
+dag[7, c(8, 10)] <- 1
+dag[8, c(5, 9, 10)] <- 1
+dag[9, c(10)] <- 1
+
+labels <- matrix(list(), n, n)
+labels[[2, 3]] <- rbind(0)
+labels[[1, 4]] <- rbind(1)
+labels[[4, 5]] <- rbind(c(0, NA))
+labels[[8, 5]] <- rbind(c(0, NA))
+labels[[2, 7]] <- rbind(c(1, 1, 0))
+labels[[3, 7]] <- rbind(c(0, 1, 1), c(1, NA, 1))
+labels[[4, 7]] <- rbind(c(1, 1, NA))
+labels[[6, 7]] <- rbind(c(1, 1, NA))
+labels[[5, 9]] <- rbind(1)
+labels[[7, 10]] <- rbind(c(1, NA, NA))
+labels[[8, 10]] <- rbind(c(1, NA, NA))
+labels[[9, 10]] <- rbind(c(1, NA, NA))
+
+
+g <- as(dag, "graphNEL")
+
+indx <- sapply(labels[dag == 1], is.null)
+prettify_lab <- function(x) {
+  tmp <- apply(x, 1, function(y) sprintf("(%s)",  paste(y, collapse = ",")))
+  sprintf("{%s}", paste(gsub("NA", "*", tmp), collapse = ","))
+}
+
+edgeAttr <- sapply(labels[dag == 1][!indx], prettify_lab)
+names(edgeAttr) <- Rgraphviz::edgeNames(g)[!indx]
+Rgraphviz::plot(g, edgeAttrs = list(label = edgeAttr))
+
+# store labels as nested list
+labels <- lapply(seq_len(n), function(i) labels[which(dag[, i] == 1), i])
+
+# draw distribution over labeled DAG
+set.seed(007)
+bn <- rand_bn(dag, labels, nlev, alpha = 1)
+pdos <- bida:::interv_probs_from_bn(bn, "exact")
+tau  <- vapply(pdos, bida:::avg_jsd_array, numeric(1))
+
+dmat <- bida:::descendants(dag)
+dindx <- diag(n) == 1
+strong_effects  <- tau[!dindx] > quantile(tau[!dindx][dmat[!dindx]==1], .8)
+
+
+```
+
+
+Specify a user-defined score function for labeled DAGs, to be used with `BiDAG::scoreparameters` 
+Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
+```{r,}
+ess <- 1
+kappa <- .25
+
+#' See `scoretype` parameter in [BiDAG::scoreparameters].
+usrDAGcorescore <- function(j, parentnodes, n, param) {
+  local_CSI_score(param$data, nlev, j, parentnodes, ess = ess, kappa = kappa)
+}
+assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+
+```
+
+Run partition MCMC and write to file.
+```{r}
+dims <- list(r = 1:30,
+             N = c(300, 1000, 3000),
+             model = c("DAG", "LDAG", "KNOWN"))
+if (runMCMC) {
+  for (r in dims$r) {
+  for (NN in seq_along(dims$N)) {
+    N <- dims$N[NN]
+    set.seed(r+N)
+    data <- bida:::sample_data_from_bn(bn, N)
+    
+    for (m in dims$model) {
+      if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
+    
+      
+      if (m == "DAG") {
+        scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
+      } else {
+        scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
+        scorepar$Cvec <- nlev
+      }
+      tic <- Sys.time()
+      iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
+      print(Sys.time()-tic)
+      smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
+      print(Sys.time()-tic)
+      
+      filename <- sprintf("%s_N%s_r%02.0f.rds", m, N, r)
+      saveRDS(list(bn, iterfit, smpl), here::here("./MCMCchains/", filename))
+      
+    }
+  }
+}
+}
+
+```
+
+```{r}
+
+if (runMCMC) {
+  nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
+dims <- list(r = 11:30,
+             N = c(300, 1000, 3000),
+             model = c("DAG", "LDAG", "KNOWN"))
+  for (r in dims$r) {
+  for (NN in seq_along(dims$N)) {
+    N <- dims$N[NN]
+    set.seed(r+N)
+    data <- bida:::sample_data_from_bn(bn, N)
+    
+    for (m in dims$model) {
+      if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
+    
+      
+      if (m == "DAG") {
+        scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
+      } else {
+        scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
+        scorepar$Cvec <- nlev
+      }
+      tic <- Sys.time()
+      iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
+      print(Sys.time()-tic)
+      smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
+      print(Sys.time()-tic)
+      
+      filename <- sprintf("asia_%s_N%s_r%02.0f.rds", m, N, r)
+      saveRDS(list(bn, iterfit, smpl), here::here("./MCMCchains/", filename))
+      
+    }
+  }
+}
+}
+```
+
+Load sampled DAGs from file and compute intervention distributions
+```{r}
+# discard first 200 DAGs
+burnin <- seq_len(200)          
+
+# init structures for storing sim results
+mse <- taus <- edgep <- ancp <- array(list(), lengths(dims), dims)
+
+for (r in dims$r) {
+  for (NN in seq_along(dims$N)) {
+    N <- dims$N[NN]
+    set.seed(r+N)
+    data <- bida:::sample_data_from_bn(bn, N)
+    
+
+    for (m in dims$model) {
+      if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
+      
+      # compute support over parent sets
+      if (m == "KNOWN") {
+        ps   <- bida:::parent_support_from_dags(list(dag), 1)
+      } else {
+        # load MCMC-chain object from file
+        filename <- sprintf("%s_N%s_r%02.0f.rds", m, N, r)
+        smpl <- readRDS(here::here("./MCMCchains/", filename))[[3]]
+        
+        # list unique DAGs
+        dags <- lapply(smpl$traceadd$incidence[-burnin], as.matrix)
+        u    <- unique(dags)
+        support  <- bida:::rowsum_fast(rep(1/length(dags), length(dags)), dags, u)
+        dags <- u 
+        dmats <- lapply(dags, bida:::descendants)
+        
+        # compute edge prob and ARP
+        edgep[[r, NN, m]] <- Reduce("+", Map("*", dags, support))
+        ancp[[r, NN, m]]  <- Reduce("+", Map("*", dmats, support))
+        
+        ps   <- bida:::parent_support_from_dags(dags, support)
+      }
+     
+
+      
+      # compute MSE of intervention distrib params
+      bida <- bida:::bida(ps, data, "categorical", list(nlev = nlev, ess = ess))
+      means <- bida:::posterior_mean(bida)
+      tmp <- vapply(seq_along(means)[!dindx], 
+                    function(x) mean((means[[x]]-pdos[[x]])**2), numeric(1))
+      mse[[r, NN, m]] <- tmp
+      taus[[r, NN, m]] <- vapply(means[!dindx], bida:::avg_jsd_array, numeric(1))
+    }
+  }
+}
+```
+
+### MSE of intervention distribution params
+```{r}
+df <- cbind(expand.grid(dims)[!sapply(mse, is.null), ], do.call("rbind", mse))
+df <- cbind(expand.grid(dims)[!sapply(mse, is.null), ], sqrt(vapply(mse, mean, numeric(1))))
+
+df %>% 
+  tidyr::pivot_longer(-c(1:3)) %>% 
+  mutate(N = factor(N, sort(unique(N)))) %>% 
+  ggplot(aes(N, value, color = model)) +
+  #facet_grid(, scales = "free") +
+  theme_minimal() +
+  theme(legend.position = "top",
+        legend.title=element_blank()) +
+  geom_boxplot() +
+  ylab("Root-squared mean errors (RMSE)") +
+  xlab("Sample size") 
+```
+
+### Precision recall
+```{r}
+compute_prec_recall <- function(x, y) {
+  indx <- order(x, decreasing = TRUE)
+  tp  <- cumsum(y[indx])
+  cbind(indx = indx, TPR = tp/sum(y), PPV = tp/seq_along(y))
+}
+
+# edge probs
+par <- expand.grid(dimnames(edgep[,,-3]))
+tmp <- lapply(edgep[,,-3], function(x) compute_prec_recall(unlist(x), dag))
+indx <- rep(seq_len(nrow(par)), each = n**2)
+df  <- cbind(par[indx, ], do.call("rbind", tmp))
+
+df %>% 
+  ggplot(aes(TPR, PPV, color = r)) +
+  facet_grid(N~model) +
+  geom_hline(aes(yintercept = mean(dag)), size = .2) +
+  geom_line() +
+  ylab("Precision") +
+  xlab("True positive rate") +
+  ggtitle("Edge probability") 
+
+# ancestor relation probs
+par <- expand.grid(dimnames(ancp[,,-3]))
+tmp <- lapply(ancp[,,-3], function(x) compute_prec_recall(unlist(x), dmat))
+indx <- rep(seq_len(nrow(par)), each = n**2)
+df  <- cbind(par[indx, ], do.call("rbind", tmp))
+
+df %>% 
+  ggplot(aes(TPR, PPV, color = r)) +
+  facet_grid(N~model) +
+  geom_hline(aes(yintercept = mean(dmat)), size = .2) +
+  geom_line() +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ylab("Precision") +
+  xlab("True positive rate") 
+
+# Strong effects
+par <- expand.grid(dimnames(taus))
+tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
+indx <- rep(seq_len(nrow(par)), each = n*(n-1))
+df  <- cbind(par[indx, ], do.call("rbind", tmp))
+
+df %>% 
+  ggplot(aes(TPR, PPV, color = r)) +
+  facet_grid(N~model) +
+  geom_hline(aes(yintercept = mean(strong_effects)), size = .2) +
+  geom_line() +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ylab("Precision") +
+  xlab("True positive rate") 
+#  ggtitle("Top 10th percentile strongest effect")
+
+```
+
+```{r}
+
+# avg ppv 
+avgppv <- function(x, which_true) {
+  pp  <- (length(x)-rank(x) +1)[which_true]
+  ppv <- seq_along(pp)/sort(pp)
+  mean(ppv)
+}
+
+tmp <- lapply(taus, function(x) avgppv(x, which(strong_effects == 1)))
+df  <- cbind(expand.grid(dimnames(taus)), value = do.call("rbind", tmp)) 
+
+
+df %>% 
+  group_by(N, model) %>% 
+  summarize(mean = mean(value),
+            sd   = sd(value)) %>% 
+  tidyr::pivot_longer(c("mean", "sd")) %>% 
+  mutate(value = as.character(round(value, 2)), 
+         value = ifelse(name == "sd", paste0("(", value, ")"), value)) %>% 
+  tidyr::pivot_wider(names_from = "model") -> tab
+
+tab %>% 
+  select(-name) %>% 
+  knitr::kable(digits = c(2))
+
+
+# positive effects
+tmp <- lapply(taus, function(x) avgppv(x, which(dmat[!dindx] == 1)))
+df  <- cbind(expand.grid(dimnames(taus)), value = do.call("rbind", tmp)) 
+
+
+df %>% 
+  group_by(N, model) %>% 
+  summarize(mean = mean(value),
+            sd   = sd(value)) %>% 
+  tidyr::pivot_longer(c("mean", "sd")) %>% 
+  mutate(value = as.character(round(value, 2)), 
+         value = ifelse(name == "sd", paste0("(", value, ")"), value)) %>% 
+  tidyr::pivot_wider(names_from = "model") -> tab
+
+tab %>% 
+  select(-name) %>% 
+  knitr::kable(digits = c(2))
+
+```
+
