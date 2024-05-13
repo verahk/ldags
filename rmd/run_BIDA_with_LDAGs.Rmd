@@ -3,16 +3,17 @@ title: 'Run approx BIDA with labeled DAGs'
 author: "Vera Kvisgaard"
 output: 
   html_document:
-  toc: true
+    toc: true
 ---
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 library(ggplot2)
 library(dplyr)
 library(pcalg)
 library(BiDAG)
-
+library(Rgraphviz)
+library(pcalg)
 
 here::i_am("./rmd/run_BIDA_with_LDAGs.Rmd")
 # source functions from file
@@ -23,10 +24,9 @@ verbose <- FALSE
 runMCMC <- FALSE
 ```
 
-Define underlying labeled DAG
+### Draw a random Bayesian network
+Define labeled DAG
 ```{r}
-library(Rgraphviz)
-library(pcalg)
 
 dag <- rbind(L  = c(0, 1, 1, 0, 1),
              Z1 = c(0, 0, 0, 1, 0),
@@ -69,6 +69,7 @@ dmat <- bida:::descendants(dag)
 dindx <- diag(n) == 1
 strong_effects  <- tau[!dindx] > quantile(tau[!dindx][dmat[!dindx]==1], .8)
 ```
+### Score function
 Define a score-function that can be used with `BiDAG`. 
 Need to assign this function to the namespace of the package, otherwise an internal function is called.
 ```{r}
@@ -101,7 +102,8 @@ get_scorepar <- function(m, data, nlev, tab = NULL) {
 }
 ```
 
-Run partition MCMC and write to file.
+### Run partition MCMC 
+Run partition MCMC to sample DAGs and write results to file.
 ```{r}
 dims <- list(r = 1:10,
              N = c(100, 300, 1000),
@@ -135,7 +137,7 @@ if (runMCMC) {
 
 ```
 
-
+### Compute causal params
 Load sampled DAGs from file and compute intervention distributions
 ```{r}
 # discard first 200 DAGs
@@ -191,7 +193,8 @@ for (r in dims$r) {
 }
 ```
 
-### MSE of intervention distribution params
+### Results
+#### MSE of posterior mean of intervention distribution params
 ```{r}
 df <- cbind(expand.grid(dims)[!sapply(mse, is.null), ], do.call("rbind", mse))
 df <- cbind(expand.grid(dims)[!sapply(mse, is.null), ], sqrt(vapply(mse, mean, numeric(1))))
@@ -209,7 +212,7 @@ df %>%
   xlab("Sample size") 
 ```
 
-### Precision recall
+#### Precision recall
 ```{r message=FALSE, warning=FALSE}
 compute_prec_recall <- function(x, y) {
   indx <- order(x, decreasing = TRUE)
@@ -250,12 +253,12 @@ df %>%
   ggtitle("Ancestor relation probabilities") 
 
 # # Strong effects
-# par <- expand.grid(dimnames(taus))
-# tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
-# indx <- rep(seq_len(nrow(par)), each = n*(n-1))
-# df  <- cbind(par[indx, ], do.call("rbind", tmp))
-# 
-# df %>% 
+par <- expand.grid(dimnames(taus))
+tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
+indx <- rep(seq_len(nrow(par)), each = n*(n-1))
+df  <- cbind(par[indx, ], do.call("rbind", tmp))
+
+# df %>%
 #   ggplot(aes(TPR, PPV, color = r)) +
 #   facet_grid(N~model) +
 #   geom_hline(aes(yintercept = mean(strong_effects)), size = .2) +
