@@ -74,32 +74,26 @@ data <- sapply(df, as.numeric) -1
 ```
 
 
-## Compute local scores of LDAGs
-
-Define routine for computing the local score of a LDAG-node:
-```{r, file = here::here("./R/local_CSI_score.R")}
-
-```
-
-### Result of `optimize_CSI_structure`:
-The function returns the optimal partition and each parts contribution to the score of the local distribution.
+## Optimize local CSI structure:
+The function `optimize_CSI_structure` runs a greedy search for the optimal CSI-consistent partition for binary variables. 
 ```{r}
-cat("Optimized CSI-structure:\n")
+cat("\nOptimized CSI-structure:\n")
 optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = .5)
 sum(optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = .5)$scores)
 
-cat("Full CPT:\n")
+cat("\nFull CPT:\n")
 optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = 0)
 sum(optimize_CSI_structure(data, nlev, 3, 1:2, ess = 1, kappa = 0)$scores)
 ```
 
-Check score of node `Y` with different parent sets:
+
+Compare the local CSI-score of node `Y` with different parent sets:
 ```{r}
 cat("Local scores:\n")
-local_CSI_score(data, nlev, 3, integer(0), ess = 1, kappa = .5)
-local_CSI_score(data, nlev, 3, 1, ess = 1, kappa = .5)
-local_CSI_score(data, nlev, 3, 2, ess = 1, kappa = .5)
-local_CSI_score(data, nlev, 3, 1:2, ess = 1, kappa = .5)
+local_CSI_score(data, nlev, 3, integer(0), ess = 1, kappa = .5)$score
+local_CSI_score(data, nlev, 3, 1, ess = 1, kappa = .5)$score
+local_CSI_score(data, nlev, 3, 2, ess = 1, kappa = .5)$score
+local_CSI_score(data, nlev, 3, 1:2, ess = 1, kappa = .5)$score
 ```
 
 Check observed sample proportions
@@ -110,30 +104,45 @@ counts/rep(colSums(counts), each = 2)
 
 ```
 
-
-## Run `BiDAG::iterativeMCMC`
+## Run `BiDAG::iterativeMCMC` with user-specified function
 
 Define a `scoreparameters`-object for `BiDAG`'s MCMC functions. 
 Note that the level of each variable is added to the list of parameters. 
 I think this argument is used in the PC-algorithm-step, but it is not added when `type = "usr"`.
 ```{r}
-
 library(BiDAG)
 scorepar <- scoreparameters("usr", 
                          data = data,
                          usrpar = list(pctesttype = "bdecat"))
-scorepar$Cvec <- nlev 
+scorepar$Cvec <- nlev
+
 ```
 
+
 Define the user-specified scoring function that is to be called from `BiDAG`-functions.
-Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
+Store lookuptable in a `rlang::env` environment, to modify the table without copying it.
+```{r, file = here::here("./R/score_from_lookup.R")}
+
+```
+
+Define a wrapper function with same arguments as the `BIDAG:::usrDAGcorescore` function and
+assign this function to the name-space of `BiDAG`-package, as otherwise the internal function is called. 
 ```{r,}
-#' See `scoretype` parameter in [BiDAG::scoreparameters].
-usrDAGcorescore <- function(j, parentnodes, n, param) {
-  local_CSI_score(param$data, nlev, j, parentnodes, ess = 1, kappa = .5)
+
+# wrapper function
+usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
+  score_from_lookup(scorepar$data, scorepar$Cvec, j, parentnodes, scorepar$tab)
 }
 
+# assign to namespace
 assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+
+# init score table
+scorepar$tab <- init_lookup_scoretable(ncol(data), list(ess = 1, kappa = .5))
+usrDAGcorescore(1, 2:3, ncol(data), scorepar)
+ls.str(scorepar$tab)
+
+
 ```
 
 
@@ -146,23 +155,21 @@ summary(iterativefit)
 ```
 
 
+Plot MAP DAG and score, and check that the score equals the sum of all local CSIs-scores.
 ```{r}
-tab <- getSpace(iterativefit)
-tab$tables[[1]]
-```
-
-```{r}
-cat("\n MAP DAG and score")
 iterativefit$DAG
 iterativefit$score
-```
 
-Compare score of MAP-dag with that given by user-defined function:
-```{r}
 tmp <- sapply(seq_along(bn), 
               function(j) usrDAGcorescore(j, which(iterativefit$DAG[, j] == 1), n = length(bn), scorepar))
 all(sum(tmp) == iterativefit$score)
 ```
+
+Plot list with CSI-tables and scores:
+```{r}
+str(tab$scores, max.level = 2)
+```
+
 
 # Repeat using standard BDeu-score
 ```{r}

@@ -17,7 +17,7 @@ library(BiDAG)
 here::i_am("./rmd/run_BIDA_with_LDAGs.Rmd")
 # source functions from file
 files <- list.files(here::here("R"), ".R", full.names = T)
-sapply(files, source)
+invisible(sapply(files, source))
 
 verbose <- FALSE
 runMCMC <- FALSE
@@ -25,48 +25,36 @@ runMCMC <- FALSE
 
 Define underlying labeled DAG
 ```{r}
-n <- 10
+library(Rgraphviz)
+library(pcalg)
+
+dag <- rbind(L  = c(0, 1, 1, 0, 1),
+             Z1 = c(0, 0, 0, 1, 0),
+             Z2 = c(0, 0, 0, 1, 0),
+             X  = c(0, 0, 0, 0, 1),
+             Y  = rep(0, 5))
+colnames(dag) <- rownames(dag)
+n <- ncol(dag)
 nlev <- rep(2, n)
-dag <- matrix(0, n, n)
-colnames(dag) <- rownames(dag) <- paste0("X", seq_len(n))
-
-
-dag[1, 2:5] <- 1
-dag[2, c(3, 7)] <- 1
-dag[3, c(4, 7)] <- 1
-dag[4, c(5, 7, 8)] <- 1
-dag[5, c(9)] <- 1
-dag[6, c(7, 10)] <- 1
-dag[7, c(8, 10)] <- 1
-dag[8, c(5, 9, 10)] <- 1
-dag[9, c(10)] <- 1
 
 labels <- matrix(list(), n, n)
-labels[[2, 3]] <- rbind(0)
-labels[[1, 4]] <- rbind(1)
-labels[[4, 5]] <- rbind(c(0, NA))
-labels[[8, 5]] <- rbind(c(0, NA))
-labels[[2, 7]] <- rbind(c(1, 1, 0))
-labels[[3, 7]] <- rbind(c(0, 1, 1), c(1, NA, 1))
-labels[[4, 7]] <- rbind(c(1, 1, NA))
-labels[[6, 7]] <- rbind(c(1, 1, NA))
-labels[[5, 9]] <- rbind(1)
-labels[[7, 10]] <- rbind(c(1, NA, NA))
-labels[[8, 10]] <- rbind(c(1, NA, NA))
-labels[[9, 10]] <- rbind(c(1, NA, NA))
+labels[[2, 4]] <- rbind(0)  # Z1 -> X
+labels[[3, 4]] <- rbind(0)  # Z2 -> X
+labels[[4, 5]] <- rbind(0)  # X -> Y
 
-
+# plot
 g <- as(dag, "graphNEL")
-
 indx <- sapply(labels[dag == 1], is.null)
 prettify_lab <- function(x) {
   tmp <- apply(x, 1, function(y) sprintf("(%s)",  paste(y, collapse = ",")))
   sprintf("{%s}", paste(gsub("NA", "*", tmp), collapse = ","))
 }
 
-edgeAttr <- sapply(labels[dag == 1][!indx], prettify_lab)
-names(edgeAttr) <- Rgraphviz::edgeNames(g)[!indx]
-Rgraphviz::plot(g, edgeAttrs = list(label = edgeAttr))
+lab <- sapply(labels[dag == 1][!indx], prettify_lab)
+fonts <- rep(10, length(lab))
+names(lab) <- names(fonts) <- Rgraphviz::edgeNames(g)[!indx]
+Rgraphviz::plot(g, edgeAttrs = list(label = lab, fontsize = fonts))
+
 
 # store labels as nested list
 labels <- lapply(seq_len(n), function(i) labels[which(dag[, i] == 1), i])
@@ -80,100 +68,73 @@ tau  <- vapply(pdos, bida:::avg_jsd_array, numeric(1))
 dmat <- bida:::descendants(dag)
 dindx <- diag(n) == 1
 strong_effects  <- tau[!dindx] > quantile(tau[!dindx][dmat[!dindx]==1], .8)
-
-
 ```
+Define a score-function that can be used with `BiDAG`. 
+Need to assign this function to the namespace of the package, otherwise an internal function is called.
+```{r}
 
-
-Specify a user-defined score function for labeled DAGs, to be used with `BiDAG::scoreparameters` 
-Also, assign this function to the name-space of `BiDAG`-package, as otherwise an internal function is called. 
-```{r,}
-ess <- 1
-kappa <- .25
-
-#' See `scoretype` parameter in [BiDAG::scoreparameters].
-usrDAGcorescore <- function(j, parentnodes, n, param) {
-  local_CSI_score(param$data, nlev, j, parentnodes, ess = ess, kappa = kappa)
+# wrapper function
+usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
+  score_from_lookup(scorepar$data, scorepar$Cvec, j, parentnodes, scorepar$tab)
 }
+
+# assign to namespace
 assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
 
 ```
 
+
+Specify a `BiDAG::scoreparameters` for LDAGs and standard (discrete) DAGs.
+```{r}
+get_scorepar <- function(m, data, nlev, tab = NULL) {
+ if (m == "DAG") {
+      scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
+    } else {
+      if (is.null(tab)) {
+        tab <- init_lookup_scoretable(ncol(data), list(ess = 1, kappa = .5))
+      }
+      scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
+      scorepar$Cvec <- nlev
+      scorepar$tab <- tab
+    }
+  return(scorepar)
+}
+```
+
 Run partition MCMC and write to file.
 ```{r}
-dims <- list(r = 1:30,
-             N = c(300, 1000, 3000),
+dims <- list(r = 1:10,
+             N = c(100, 300, 1000),
              model = c("DAG", "LDAG", "KNOWN"))
 if (runMCMC) {
   for (r in dims$r) {
-  for (NN in seq_along(dims$N)) {
-    N <- dims$N[NN]
-    set.seed(r+N)
-    data <- bida:::sample_data_from_bn(bn, N)
-    
-    for (m in dims$model) {
-      if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
-    
+    for (NN in seq_along(dims$N)) {
+      N <- dims$N[NN]
+      set.seed(r+N)
+      data <- bida:::sample_data_from_bn(bn, N)
       
-      if (m == "DAG") {
-        scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
-      } else {
-        scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
-        scorepar$Cvec <- nlev
+      for (m in dims$model) {
+        if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
+        if (m == "KNOWN") next
+        filename <- sprintf("LDAG5_nodes_%s_N%s_r%02.0f.rds", m, N, r)
+        if (file.exists(here::here("./MCMCchains/", filename))) next
+        
+        scorepar <- get_scorepar(m, data, nlev)
+        tic <- Sys.time()
+        iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
+        print(Sys.time()-tic)
+        smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
+        print(Sys.time()-tic)
+        
+        saveRDS(list(bn, iterfit, smpl, scorepar), here::here("./MCMCchains/", filename))
+        
       }
-      tic <- Sys.time()
-      iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
-      print(Sys.time()-tic)
-      smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
-      print(Sys.time()-tic)
-      
-      filename <- sprintf("%s_N%s_r%02.0f.rds", m, N, r)
-      saveRDS(list(bn, iterfit, smpl), here::here("./MCMCchains/", filename))
-      
     }
   }
-}
 }
 
 ```
 
-```{r}
-
-if (runMCMC) {
-  nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
-dims <- list(r = 11:30,
-             N = c(300, 1000, 3000),
-             model = c("DAG", "LDAG", "KNOWN"))
-  for (r in dims$r) {
-  for (NN in seq_along(dims$N)) {
-    N <- dims$N[NN]
-    set.seed(r+N)
-    data <- bida:::sample_data_from_bn(bn, N)
-    
-    for (m in dims$model) {
-      if (verbose) cat(sprintf("\n iteration: %s, N: %s, model: %s\n", r, N, m))
-    
-      
-      if (m == "DAG") {
-        scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
-      } else {
-        scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
-        scorepar$Cvec <- nlev
-      }
-      tic <- Sys.time()
-      iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
-      print(Sys.time()-tic)
-      smpl     <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
-      print(Sys.time()-tic)
-      
-      filename <- sprintf("asia_%s_N%s_r%02.0f.rds", m, N, r)
-      saveRDS(list(bn, iterfit, smpl), here::here("./MCMCchains/", filename))
-      
-    }
-  }
-}
-}
-```
 
 Load sampled DAGs from file and compute intervention distributions
 ```{r}
@@ -198,7 +159,8 @@ for (r in dims$r) {
         ps   <- bida:::parent_support_from_dags(list(dag), 1)
       } else {
         # load MCMC-chain object from file
-        filename <- sprintf("%s_N%s_r%02.0f.rds", m, N, r)
+        filename <- sprintf("LDAG5_nodes_%s_N%s_r%02.0f.rds", m, N, r)
+        if (!file.exists(here::here("./MCMCchains/", filename))) next
         smpl <- readRDS(here::here("./MCMCchains/", filename))[[3]]
         
         # list unique DAGs
@@ -218,7 +180,7 @@ for (r in dims$r) {
 
       
       # compute MSE of intervention distrib params
-      bida <- bida:::bida(ps, data, "categorical", list(nlev = nlev, ess = ess))
+      bida <- bida:::bida(ps, data, "categorical", list(nlev = nlev, ess = 1))
       means <- bida:::posterior_mean(bida)
       tmp <- vapply(seq_along(means)[!dindx], 
                     function(x) mean((means[[x]]-pdos[[x]])**2), numeric(1))
@@ -248,7 +210,7 @@ df %>%
 ```
 
 ### Precision recall
-```{r}
+```{r message=FALSE, warning=FALSE}
 compute_prec_recall <- function(x, y) {
   indx <- order(x, decreasing = TRUE)
   tp  <- cumsum(y[indx])
@@ -268,7 +230,7 @@ df %>%
   geom_line() +
   ylab("Precision") +
   xlab("True positive rate") +
-  ggtitle("Edge probability") 
+  ggtitle("Edge probabilities") 
 
 # ancestor relation probs
 par <- expand.grid(dimnames(ancp[,,-3]))
@@ -284,24 +246,25 @@ df %>%
   theme_minimal() +
   theme(legend.position = "none") +
   ylab("Precision") +
-  xlab("True positive rate") 
+  xlab("True positive rate") +
+  ggtitle("Ancestor relation probabilities") 
 
-# Strong effects
-par <- expand.grid(dimnames(taus))
-tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
-indx <- rep(seq_len(nrow(par)), each = n*(n-1))
-df  <- cbind(par[indx, ], do.call("rbind", tmp))
-
-df %>% 
-  ggplot(aes(TPR, PPV, color = r)) +
-  facet_grid(N~model) +
-  geom_hline(aes(yintercept = mean(strong_effects)), size = .2) +
-  geom_line() +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  ylab("Precision") +
-  xlab("True positive rate") 
-#  ggtitle("Top 10th percentile strongest effect")
+# # Strong effects
+# par <- expand.grid(dimnames(taus))
+# tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
+# indx <- rep(seq_len(nrow(par)), each = n*(n-1))
+# df  <- cbind(par[indx, ], do.call("rbind", tmp))
+# 
+# df %>% 
+#   ggplot(aes(TPR, PPV, color = r)) +
+#   facet_grid(N~model) +
+#   geom_hline(aes(yintercept = mean(strong_effects)), size = .2) +
+#   geom_line() +
+#   theme_minimal() +
+#   theme(legend.position = "none") +
+#   ylab("Precision") +
+#   xlab("True positive rate") +
+#   ggtitle("Top 20th percentile strongest effect")
 
 ```
 

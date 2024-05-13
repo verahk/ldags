@@ -6,117 +6,148 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
 ```
-
-This note test how the `BiDAG` package can be manipulated used to sample LDAGs. 
-Use the Asia network. 
 
 ```{r}
-here::i_am("./rmd/sample_ldags_with_BIDAG.Rmd")
-bn <- readRDS(here::here("./data/asia.rds"))
-df <- bnlearn::rbn(bn, 1000)
-data <- sapply(df, as.numeric) -1
-nlev <- sapply(df, nlevels)
-dmat <- bida:::descendants(bn)
+library(Rgraphviz)
+library(pcalg)
+library(BiDAG)
+here::i_am("./rmd/sample_ldags_with_BiDAG.Rmd")
+invisible(sapply(list.files(here::here("./R/"), ".R", full.names = T), source))
 ```
+
+
+```{r}
+
+dag <- rbind(L  = c(0, 1, 1, 0, 1),
+             Z1 = c(0, 0, 0, 1, 0),
+             Z2 = c(0, 0, 0, 1, 0),
+             X  = c(0, 0, 0, 0, 1),
+             Y  = rep(0, 5))
+colnames(dag) <- rownames(dag)
+n <- ncol(dag)
+nlev <- rep(2, n)
+
+labels <- matrix(list(), n, n)
+labels[[2, 4]] <- rbind(0)  # Z1 -> X
+labels[[3, 4]] <- rbind(0)  # Z2 -> X
+labels[[4, 5]] <- rbind(0)  # X -> Y
+
+# plot
+g <- as(dag, "graphNEL")
+indx <- sapply(labels[dag == 1], is.null)
+prettify_lab <- function(x) {
+  tmp <- apply(x, 1, function(y) sprintf("(%s)",  paste(y, collapse = ",")))
+  sprintf("{%s}", paste(gsub("NA", "*", tmp), collapse = ","))
+}
+
+lab <- sapply(labels[dag == 1][!indx], prettify_lab)
+fonts <- rep(10, length(lab))
+names(lab) <- names(fonts) <- Rgraphviz::edgeNames(g)[!indx]
+Rgraphviz::plot(g, edgeAttrs = list(label = lab, fontsize = fonts))
+```
+
+
+Draw a distribution over the labeled DAG:
+```{r}
+set.seed(007)
+# store labels as nested list
+labels <- lapply(seq_len(n), function(i) labels[which(dag[, i] == 1), i])
+bn <- rand_bn(dag, labels, nlev, alpha = 1)
+bn
+```
+
 
 Define a score-function that can be used with `BiDAG`. 
-Need to assign this function to the namespace of the package, otherwise an internal function is called (..).
+Need to assign this function to the namespace of the package, otherwise an internal function is called.
 ```{r}
-library(BiDAG)
-usrDAGcorescore <- function(j, parentnodes, n, param) {
-  famscore_csi_from_data(param$data, nlev, j, parentnodes, ess = 1, kappa = .5)
+
+# wrapper function
+usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
+  score_from_lookup(scorepar$data, scorepar$Cvec, j, parentnodes, scorepar$tab)
 }
+
+# assign to namespace
 assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
-```
 
-Specify a `BiDAG::scoreparameters` for LDAGs and standard (discrete) DAGs.
-```{r}
-scorepar <- list()
-
-scorepar$LDAG <- scoreparameters("usr", 
-                         data = data,
-                         usrpar = list(pctesttype = "bdecat"))
-scorepar$LDAG$Cvec <- nlev # required to run PC-algo with "bdecat" options, in search for initial search space.
-
-scorepar$DAG <- scoreparameters("bdecat", 
-                          data = df,
-                          bdecatpar = list(chi = 1, edgepf = 1))
 ```
 
 ## Check convergence of MCMC-chain. 
-Run MCMC using the three algorithms `"order", "orderIter", "partition"` twice, and compare the resulting edge probabilities. True edges are marked in blue.
-```{r}
-indx <- bnlearn::amat(bn) == 1
-par(mfrow = c(2, 3))
-for (x in c("DAG", "LDAG")) {
-  for (algo in c("order", "orderIter", "partition")) {
-  smpls <- replicate(2, sampleBN(scorepar[[x]], algo, verbose = F), simplify = FALSE)
-  edgep <- lapply(smpls, edgep)
-  plot(edgep[[1]], edgep[[2]], 
-       ylim = c(0, 1), xlim = c(0,1),
-       main = paste0(x, " + ", algo))
-  points(edgep[[1]][indx], edgep[[2]][indx], col = "blue")
-  abline(a = 0, b = 1, col = "red")
-  }
-}
 
+```{r}
+data <- bida:::sample_data_from_bn(bn, 100)
 ```
 
 
+Specify a `BiDAG::scoreparameters` for LDAGs and standard (discrete) DAGs.
+```{r}
+get_scorepar <- function(m, data, nlev, tab = NULL) {
+ if (m == "DAG") {
+      scorepar <- scoreparameters("bdecat", data = as.data.frame(data), bdecatpar = list(chi = 1, edgepf = 1))
+    } else {
+      if (is.null(tab)) {
+        tab <- init_lookup_scoretable(ncol(data), list(ess = 1, kappa = .5))
+      }
+      scorepar <- scoreparameters("usr", data = data, usrpar = list(pctesttype = "bdecat"))
+      scorepar$Cvec <- nlev
+      scorepar$tab <- tab
+    }
+  return(scorepar)
+}
+```
 
 ```{r}
 
-# replicate BIDAG::edgep for iterativeMCMC trace-add. 
-# Not sure why this include multiple lists with sampled DAGs..
-compute_arp <- function(MCMCchain) {
-  ln <- length(MCMCchain$traceadd[[1]])
-  MCMCchain$traceadd[[1]] <- c(MCMCchain$traceadd[[1]][[ln - 
-                1]], MCMCchain$traceadd[[1]][[ln]])
-  
+arp_from_MCMCchain <- function(MCMCchain) {
   ln <- length(MCMCchain$traceadd$incidence)
   dmats <- lapply(MCMCchain$traceadd$incidence[seq.int(ceiling(.2*ln), ln)], function(dag) bida:::descendants(as.matrix(dag)))
   Reduce("+", dmats)/length(dmats)
 }
-
-samplesizes <- round(10**seq(2, 4, length.out = 10))
-rmses <- matrix(nrow = length(samplesizes), ncol = 2)
-colnames(rmses) <- c("DAG", "LDAG")
-for (i in seq_along(samplesizes)) {
-  cat("\n samplesize:", samplesizes[i], " ")
-  # sample data
-  #df <- bnlearn::rbn(bn, samplesizes[i])
-  data <- bida:::sample_data_from_bn(bn, samplesizes[i])
-  df   <- data.frame(apply(data, 2, factor, exclude = NULL, simplify = F))
-  nlev <- sapply(df, nlevels)
-  
-  # define score par
-  scorepar <- list()
-  scorepar$DAG <- scoreparameters("bdecat", 
-                            data = df,
-                            bdecatpar = list(chi = 1, edgepf = 1))
-  scorepar$LDAG <- scoreparameters("usr", 
-                           data = data,
-                           usrpar = list(pctesttype = "bdecat"))
-  scorepar$LDAG$Cvec <- nlev 
-  
-  
-  # sample DAGs and compute ARP
-  cat("smpl ")
-  smpls <- lapply(scorepar, sampleBN, algo = "orderIter")
-  
-  cat("compute ARP ")
-  arps <- lapply(smpls, compute_arp)
-  
-  # rmse 
-  rmses[i, ] <- vapply(arps, function(x) sqrt(mean( (x-dmat)**2 )), numeric(1))
-}
-
-matplot(samplesizes, rmses, type = "l", log = "x")
-               
 ```
 
 
+Run MCMC using the three algorithms `"order", "orderIter", "partition"` twice, and compare the resulting edge probabilities. True edges are marked in blue.
+```{r}
+
+m <- "DAG"
+indx <- bnlearn::amat(bn) == 1
+indx <- bida:::descendants(bn) == 1
+par(mfrow = c(2, 2))
+tab <- init_lookup_scoretable(ncol(data), list(ess = 1, kappa = .5))
+
+for (m in c("DAG", "LDAG")) {
+  edgeps <- arps <- list(order = list(), part = list())
+  for (i in c(1, 2)) {
+    cat(sprintf("\nRun partitionMCMC to sample %ss, iteration %s\n", m, i))
+    tic <- Sys.time()
+    scorepar <- get_scorepar(m, data, nlev, tab)
+    iterfit  <- learnBN(scorepar, "orderIter", verbose = TRUE, scoreout = TRUE, hardlimit = 5)
+    ordfit   <- sampleBN(scorepar, "order", scoretable = getSpace(iterfit))
+    partfit  <- sampleBN(scorepar, "partition", scoretable = getSpace(iterfit))
+    edgeps$order[[i]]  <- arp_from_MCMCchain(ordfit) #edgep(ordfit) 
+    edgeps$part[[i]]   <- arp_from_MCMCchain(partfit) #edgep(partfit) 
+    print(Sys.time()-tic)
+  }
+  
+  for(algo in names(edgeps)) {
+      plot(edgeps[[algo]][[1]], edgeps[[algo]][[2]], main = paste0(m, "+", algo))
+      points(edgeps[[algo]][[1]][indx], edgeps[[algo]][[2]][indx], pch = 19, col = "blue")
+      abline(a = 0, b = 1, col = "red")
+      
+      # plot(0, 0, xlim = c(0, 1), ylim = c(0, 1), xlab = "Recall", ylab = "Precision")
+      # for (i in 1:length(edgeps[[algo]])) {
+      #   o <- order(edgeps[[algo]][[i]], decreasing = T)
+      #   tp <- cumsum(indx[o])
+      #   lines(tp/sum(indx), tp/seq_along(tp))
+      # }
+  } 
+}
+
+
+```
 
