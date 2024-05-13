@@ -28,7 +28,7 @@ optimize_CSI_structure <- function(data, nlev, j, parentnodes, ess = 1, kappa = 
   # optimize CSI-structure
   P <- as.list(seq.int(0, q-1))
   levels <- lapply(nlev[parentnodes]-1, seq.int, from = 0)
-  optimize_CSI_structure_greedy(counts, levels, nlev, P, ess = ess, lkappa = log(kappa), verbose = verbose)
+  optimize_CSI_structure_greedy(counts, levels, nlev[parentnodes], P, ess = ess, lkappa = log(kappa), verbose = verbose)
 }
 
 
@@ -67,11 +67,7 @@ optimize_CSI_structure_greedy <- function(counts, levels, nlev = lengths(levels)
         # candidate partition
         PP  <- replace(P, i, list(c(P[[i]], P[[j]])))
         PP[j] <- NULL
-        
-        # check if collapsing part i and j result in regular, CSI-consistent partition
-        if (!is_valid_partition(PP, levels, nlev, verbose = F))  next
-        
-        
+   
         # compute score of collapsed parts
         tmp_count <- part_counts[i,, drop = FALSE] + part_counts[j, , drop = FALSE]
         tmp_score <- famscore_bdeu_byrow(tmp_count, ess, r, q, length(PP[[i]]))
@@ -81,6 +77,10 @@ optimize_CSI_structure_greedy <- function(counts, levels, nlev = lengths(levels)
         
         # compare score with current best partition
         if (diff > max_diff) {
+          
+          # check if collapsing part i and j result in regular, CSI-consistent partition
+          if (!is_valid_partition(PP, levels, nlev, verbose = F))  next
+          
           if (verbose) cat("\n (i, j):", c(i, j), "diff:", diff, "partition:", unlist_partition(PP))
           max_diff <- diff
           best_partition <- PP
@@ -94,25 +94,104 @@ optimize_CSI_structure_greedy <- function(counts, levels, nlev = lengths(levels)
     if (verbose) cat("\nbest partition:", unlist_partition(best_partition))
     optimize_CSI_structure_greedy(counts, levels, nlev, best_partition, ess, lkappa, verbose)
   } else {
-    return(list(partition = P, scores = part_scores))
+    return(list(partition = P, counts = part_counts, scores = part_scores))
+  }
+}
+
+# alternative: re-use counts and scores
+optimize_CSI_structure_greedy_2 <- function(P, counts, scores, levels, nlev = lengths(levels), ess, lkappa, verbose = FALSE){
+  
+  r   <- ncol(counts)
+  q   <- prod(nlev)
+  
+  # find the two current parts that increase the score most if collapsed
+  keep_climb <- FALSE
+  if (length(P) > 2) {
+    max_diff <- -(r-1)*lkappa
+    for (i in seq.int(1, length(P)-1)) {
+      for (j in seq.int(i+1, length(P))) {
+        
+        # candidate partition
+        PP  <- replace(P, i, list(c(P[[i]], P[[j]])))
+        PP[j] <- NULL
+        
+        
+        # compute score of collapsed parts
+        tmp_count <- counts[i,, drop = FALSE] + counts[j, , drop = FALSE]
+        tmp_score <- famscore_bdeu_byrow(tmp_count, ess, r, q, length(PP[[i]]))
+        
+        # compare score with score of non-collapsed regions
+        diff <- tmp_score - (scores[i] + scores[j])
+        
+        # compare score with current best partition
+        if (diff > max_diff) {
+
+          
+          # check if collapsing part i and j result in regular, CSI-consistent partition
+          if (!is_valid_partition(PP, levels, nlev, verbose = F))  next
+          if (verbose) cat("\n (i, j):", c(i, j), "diff:", diff, "partition:", unlist_partition(PP)) 
+   
+          max_diff <- diff
+          istar <- i
+          jstar <- j
+          scorestar <- tmp_score
+          keep_climb <- TRUE
+        }
+      }
+    }
+  }
+  
+  if (keep_climb) {
+    i <- istar
+    j <- jstar
+    counts[i, ] <- counts[i, ] + counts[j, ]
+    counts <- counts[-j, ]
+    scores[i] <- scorestar
+    scores <- scores[-j]
+    P[[i]] <- unlist(P[c(i, j)])
+    P[[j]] <- NULL
+    if (verbose) cat("\nbest partition:", unlist_partition(P))
+    optimize_CSI_structure_greedy_2(P, counts, scores, levels, nlev = lengths(levels), ess, lkappa, verbose)
+  } else {
+    return(list(partition = P, counts = counts, scores = scores))
   }
 }
 
 
-
 ### test ----
 if (FALSE) {
-  levels <- rep(list(0:1), 3)
+  levels <- rep(list(0:2), 3)
   nlev <- lengths(levels)
   q <- prod(lengths(levels))
   P <- as.list(seq_len(q)-1)
+  r <- 2
+  ess <- 1
+  kappa <- 1
   
   ##  same proportion, different counts
-  counts <- matrix(seq(10, 80, length.out = q), nrow = q, ncol = 2)
+  counts <- matrix(seq(1, q, length.out = q), nrow = q, ncol = 2)
   counts 
+  scores <- famscore_bdeu_byrow(counts, ess, r, q, 1)
+  
+  optimize_CSI_structure_greedy(counts, levels, nlev, P, 1, 0, verbose = T)
+  optimize_CSI_structure_greedy_2(P, counts, scores, levels, nlev, 1, 0, verbose = T)
+  
+  microbenchmark::microbenchmark(optimize_CSI_structure_greedy(counts, levels, nlev, P, 1, 0, verbose = F), 
+                                 optimize_CSI_structure_greedy_2(P, counts, scores, levels, nlev, 1, 0, verbose = F), 
+                                 times = 20)
+  
+  profvis::profvis(
+    optimize_CSI_structure_greedy(counts, levels, nlev, P, 1, 0, verbose = F)
+  )
+  profvis::profvis(
+    optimize_CSI_structure_greedy_2(P, counts, scores, levels, nlev, 1, 0, verbose = F)
+  )
+  
   res <- optimize_CSI_structure_greedy(counts, levels, nlev, P, 1, 0, verbose = T)
+  res <- optimize_CSI_structure_greedy_2(P, counts, scores, levels, nlev, 1, 0, verbose = T)
   # regions with high support are combined first. 
   
+
   ## different proportion, same counts
   prop <- c(.5, .4, .3, .2, .1, .05, .025, .01)
   prop <- cbind(prop, 1-prop)

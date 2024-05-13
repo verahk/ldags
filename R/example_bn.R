@@ -1,6 +1,6 @@
 
 
-example_bn <- function() {
+example_bn <- function(name) {
   if (name == "collider") {
     dag <- rbind(Z = c(0, 0, 1),
                  X = c(0, 0, 1),
