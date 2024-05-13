@@ -35,55 +35,71 @@
 #' is_valid_partition(P, levels, verbose = T) == FALSE
 #' P <- list(c(0, 2), c(1, 3))
 #' is_valid_partition(P, levels, verbose = T) == FALSE
+#' 
+#' # Different cardinality
+#' nlev <- c(2, 3, 4)
+#' levels <- lapply(nlev-1, seq.int, from = 0)
+#' P <- c(list(c(0, 2, 4)), list(c(1, 3, 5)), list(23:18), as.list(6:17))
+#' is_valid_partition(P, levels, verbose = T)
+
 is_valid_partition <- function(P, levels, nlev = lengths(levels), check_regularity = TRUE, verbose = FALSE) {
   n    <- length(levels)
   seqn <- seq_len(n)
-  stride <- c(1, cumprod(nlev[-length(n)]))
+  stride <- c(1, cumprod(nlev[-n]))
  
   # for tracking which partitions that includes all levels of each variable
   includes_all_lev <- matrix(FALSE, nrow = length(P), ncol = n)
   
   for (j in seq_along(P)[lengths(P) > 1]) {
+    
     p <- P[[j]]
-    #vals <- t(vapply(p, function(pp) (pp%/%stride)%%nlev, vector("numeric", n)))
-    #first_rows <- rep(p, n)-stride*vals
     K <- list()
     
-    for (pp in p) {
+    # configuration of nodes in the first row of current context
+    vals <- (min(p)%/%stride)%%nlev
+    
+    for (i in which(vals == 0)) {
       
-      # configuration of nodes in the current context 
-      vals <- (pp%/%stride)%%nlev
+      # matrix where each row corresponds to a label of the edge i -> child
+      labels <- bida:::expand_grid_fast(levels[-i], nlev[-i])
       
-      # the corresponding rows, setting each value to 0
-      first_row <- pp-stride*vals
       
-      for (i in seqn) {
-        
-        # list rows where the config of the co-parents of i 
-        # are consistent with pp 
-        # - a label on the edge from i to j would imply that all these rows 
-        #   belongs to the same part p
-        rows <- first_row[i] + stride[i]*levels[[i]]
-        
-        if (all(rows %in% p)) {
-          #print(i)
-          K <- c(K, list(rows))
-          includes_all_lev[j, i] <- TRUE
-        }
+      # matrix where each row corresponds to equality constraints
+      rows <- outer(c(labels%*%stride[-i]), levels[[i]]*stride[i], "+")
+      
+      # check which labels that is consistent with the part p
+      indx <- apply(rows, 1, function(x) !any(match(x, p, 0L) == 0))
+      if (any(indx)) {
+        K[[i]] <- c(rows[indx, ])
+        includes_all_lev[j, i] <- T
       }
     }
     
+    # stop if current part can not be produced by labels
     K <- unique(unlist(K))
-    if ( !(length(K) == length(p)) || !all(p == K) ) {
+    if (! (length(K) == length(p) && all(sort(K) == sort(p))) ) {
       if (verbose) cat("P is not CSI-consistent\n")
       return(FALSE)
-    } 
+    }
   }
   
-  if (check_regularity && length(P) <= max(nlev) && any(colMeans(includes_all_lev) == 1)) {
+  # check regularity 
+  if (all(lengths(P) <= min(nlev)) &&  any(colMeans(includes_all_lev) == 1)) {
     if (verbose) cat("P is not regular\n")
     return(FALSE)
   } else {
     return(TRUE)
   }
+}
+
+
+
+# test with 3 categories ----
+if (FALSE) {
+  nlev <- c(3, 3)
+  levels <- lapply(nlev-1, seq.int, from = 0)
+  P <- c(list(0:1), as.list(3:8))
+  
+  is_valid_partition(P, levels)
+  
 }
