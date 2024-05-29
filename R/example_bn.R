@@ -30,14 +30,51 @@ example_bn <- function(name) {
                  Y  = rep(0, 5))
     colnames(dag) <- rownames(dag)
     
+  } else if (name == "LDAG10") {
+    n <- 10
+    nlev <- rep(2, n)
+    levels <- lapply(nlev-1, seq.int, from = 0)
+    dag <- matrix(0, n, n)
+    colnames(dag) <- rownames(dag) <- paste0("X", seq_len(n))
     
-  } else if (FALSE) {
-    dag <- rbind(Z1 = c(0, 0, 1, 0),
-                 Z2 = c(0, 0, 1, 1),
-                 X  = c(0, 0, 0, 1),
-                 Y  = rep(0, 4))
-    colnames(dag) <- rownames(dag)
-    return(dag)
+    
+    dag[1, 2:5] <- 1
+    dag[2, c(3, 7)] <- 1
+    dag[3, c(4, 7)] <- 1
+    dag[4, c(5, 7, 8)] <- 1
+    dag[5, c(9)] <- 1
+    dag[6, c(7, 10)] <- 1
+    dag[7, c(8, 10)] <- 1
+    dag[8, c(5, 9, 10)] <- 1
+    dag[9, c(10)] <- 1
+    
+    labels <- matrix(list(), n, n)
+    labels[[2, 3]] <- rbind(0)
+    labels[[1, 4]] <- rbind(1)
+    labels[[4, 5]] <- rbind(c(0, NA))
+    labels[[8, 5]] <- rbind(c(0, NA))
+    labels[[2, 7]] <- rbind(c(1, 1, 0))
+    labels[[3, 7]] <- rbind(c(0, 1, 1), c(1, NA, 1))
+    labels[[4, 7]] <- rbind(c(1, 1, NA))
+    labels[[6, 7]] <- rbind(c(1, 1, NA))
+    labels[[5, 9]] <- rbind(1)
+    labels[[7, 10]] <- rbind(c(1, NA, NA))
+    labels[[8, 10]] <- rbind(c(1, NA, NA))
+    labels[[9, 10]] <- rbind(c(1, NA, NA))
+    
+    partitions <- vector("list", ncol(dag))
+    for (i in 1:ncol(dag)) {
+      pa   <- which(dag[, i] == 1)
+      if (length(pa) > 1) {
+        tmp <- labels[pa, i]
+        if (any(lengths(tmp) > 0)) {
+          partitions[[i]] <- labels_to_partition(tmp, levels[pa], type = "outcome_vectors")
+        }
+      }
+    }
+    nlev <- rep(2, ncol(dag))
+    bn <- rand_bn(dag, partitions, nlev, alpha = 1)
+    return(bn)
   }
   
   # return bn.fit object

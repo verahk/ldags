@@ -6,6 +6,14 @@ output:
     toc: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
 ```{r message=FALSE, warning=FALSE}
 
 library(ggplot2)
@@ -213,14 +221,24 @@ df %>%
 ```
 
 #### Precision recall
-```{r message=FALSE, warning=FALSE}
+```{r}
 compute_prec_recall <- function(x, y) {
   indx <- order(x, decreasing = TRUE)
   tp  <- cumsum(y[indx])
   cbind(indx = indx, TPR = tp/sum(y), PPV = tp/seq_along(y))
 }
 
-# edge probs
+# avg ppv 
+avgppv <- function(x, which_true) {
+  pp  <- (length(x)-rank(x) +1)[which_true]
+  ppv <- seq_along(pp)/sort(pp)
+  mean(ppv)
+}
+```
+
+#### Edge probabilities
+```{r}
+# prec-recall
 par <- expand.grid(dimnames(edgep[,,-3]))
 tmp <- lapply(edgep[,,-3], function(x) compute_prec_recall(unlist(x), dag))
 indx <- rep(seq_len(nrow(par)), each = n**2)
@@ -235,7 +253,26 @@ df %>%
   xlab("True positive rate") +
   ggtitle("Edge probabilities") 
 
-# ancestor relation probs
+# avg ppv
+tmp <- lapply(edgep[,,-3], function(x) avgppv(x, which(dag == 1)))
+df  <- cbind(par, value = do.call("rbind", tmp)) 
+
+df %>% 
+  group_by(N, model) %>% 
+  summarize(mean = mean(value),
+            sd   = sd(value)) %>% 
+  tidyr::pivot_longer(c("mean", "sd")) %>% 
+  mutate(value = as.character(round(value, 2)), 
+         value = ifelse(name == "sd", paste0("(", value, ")"), value)) %>% 
+  tidyr::pivot_wider(names_from = "model")
+
+```
+
+#### ARP
+```{r message=FALSE, warning=FALSE}
+
+
+# prec-recall
 par <- expand.grid(dimnames(ancp[,,-3]))
 tmp <- lapply(ancp[,,-3], function(x) compute_prec_recall(unlist(x), dmat))
 indx <- rep(seq_len(nrow(par)), each = n**2)
@@ -244,15 +281,28 @@ df  <- cbind(par[indx, ], do.call("rbind", tmp))
 df %>% 
   ggplot(aes(TPR, PPV, color = r)) +
   facet_grid(N~model) +
-  geom_hline(aes(yintercept = mean(dmat)), size = .2) +
+  geom_hline(aes(yintercept = mean(dag)), size = .2) +
   geom_line() +
-  theme_minimal() +
-  theme(legend.position = "none") +
   ylab("Precision") +
   xlab("True positive rate") +
-  ggtitle("Ancestor relation probabilities") 
+  ggtitle("Ancestor probabilities") 
 
-# # Strong effects
+# avg ppv
+tmp <- lapply(ancp[,,-3], function(x) avgppv(x, which(dmat == 1)))
+df  <- cbind(par, value = do.call("rbind", tmp)) 
+
+df %>% 
+  group_by(N, model) %>% 
+  summarize(mean = mean(value),
+            sd   = sd(value)) %>% 
+  tidyr::pivot_longer(c("mean", "sd")) %>% 
+  mutate(value = as.character(round(value, 2)), 
+         value = ifelse(name == "sd", paste0("(", value, ")"), value)) %>% 
+  tidyr::pivot_wider(names_from = "model")
+
+```
+# Strong effects 
+```{r}
 par <- expand.grid(dimnames(taus))
 tmp <- lapply(taus, function(x) compute_prec_recall(unlist(x), strong_effects))
 indx <- rep(seq_len(nrow(par)), each = n*(n-1))
@@ -271,14 +321,9 @@ df  <- cbind(par[indx, ], do.call("rbind", tmp))
 
 ```
 
+# 
 ```{r}
 
-# avg ppv 
-avgppv <- function(x, which_true) {
-  pp  <- (length(x)-rank(x) +1)[which_true]
-  ppv <- seq_along(pp)/sort(pp)
-  mean(ppv)
-}
 
 tmp <- lapply(taus, function(x) avgppv(x, which(strong_effects == 1)))
 df  <- cbind(expand.grid(dimnames(taus)), value = do.call("rbind", tmp)) 
