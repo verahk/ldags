@@ -28,7 +28,15 @@
 #' s1 <- list(1, rep(1, 2), c(2, 1, 1))
 #' coun
 
+
+famscore_bdeu_1row <- function(x, ess, r = length(x), q = 1, s = 1) {
+  ralpha <- ess*s/q
+  alpha <- ralpha/r
+  lgamma(ralpha) - r*lgamma(alpha) + sum(lgamma(alpha + x)) - lgamma(ralpha + sum(x))
+}
+
 famscore_bdeu_byrow <- function(x, ess, r = ncol(x), q = nrow(x), s = 1) {
-  alpha <- ess*s/(r*q) 
-  lgamma(r*alpha) - r*lgamma(alpha) + rowSums(lgamma(alpha + x)) - lgamma(r*alpha + rowSums(x))
+  ralpha <- ess*s/q
+  alpha <- ralpha/r
+  lgamma(ralpha) - r*lgamma(alpha) + rowSums(lgamma(alpha + x)) - lgamma(ralpha + rowSums(x))
 }

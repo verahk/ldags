@@ -12,7 +12,7 @@
 #' # mixed cardinality
 #' levels <- list(0:1, 0:2)
 #' counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
-#' res <- optimize_partition_ldag(counts, levels, ess = ess, verbose = T)
+#' res <- optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
 #' cbind(expand.grid(levels), n = counts, part = unlist_partition(res$partition))
 optimize_partition_ldag <- function(counts, levels, ess, 
                                     P = as.list(1:nrow(counts)-1), 
@@ -24,7 +24,11 @@ optimize_partition_ldag <- function(counts, levels, ess,
   
   nlev <- lengths(levels)
   stride <- c(1, cumprod(nlev[-length(nlev)]))
-
+  
+  conf <- bida:::expand_grid_fast(levels, nlev)
+  conf_enum <- seq_len(nrow(conf))-1 
+  #conf_enum_par <- conf_enum - sweep(conf, 2, stride, "*")
+  
   # compute seach part's contribution to the local score
   partition   <- unlist_partition(P)
   part_size   <- tabulate(partition)
@@ -36,47 +40,52 @@ optimize_partition_ldag <- function(counts, levels, ess,
   best_diff <- 0
   for (i in seq_along(nlev)) {
     
-    # find candidate contexts to add to label
+    # check if all co-parent configs is already added to label
     len <- length(labels[[i]])
-    if (len == (q/nlev[[i]]-1)) { 
-      # restrict labels to not include all co-parent contexts 
+    if (len >= (q/nlev[[i]]-1)) { 
       next 
-    } else {
-      # enumerate contexts defined by the co-parents of node i
-      contexts <- bida:::expand_grid_fast(levels[-i])%*%stride[-i]
-    
-      # remove contexts already in label on edge from i
-      contexts <- contexts[match(contexts, labels[[i]], nomatch = 0) == 0]
     }
-
-    add_to_rows <- 1+ levels[[i]]*stride[i] 
-    for (context in contexts) {
+    
+    # find candidate  labels /  co-parent configs to add to label
+    # - enumerate these contexts by the rows in the CPT where node i is zero
+    contexts <- conf_enum[conf[, i] == 0]
+    
+    # remove contexts already in label on edge from i
+    contexts <- contexts[match(contexts, labels[[i]], nomatch = 0) == 0]
+    
+    # find the parts satisfied by each candidate label
+    rows  <- outer(contexts, levels[[i]]*stride[i]+1, "+")
+    parts <- partition[rows] # each row is the parts collapsed by corresp label
+    dim(parts) <- dim(rows)
+    
+    for (j in 1:nrow(parts)) {
       
-      rows  <- context + add_to_rows    # rows in the CPT satisfied by label
-      parts <- unique(partition[rows])  # corresponding parts in current partition
-      
-      # if context is consistent with one single region, add label 
-      if (length(parts) == 1) {
-        labels[[i]] <- append(labels[[i]], context)
-        next
-      }
+      collapse <- parts[j, ]
+      if (anyDuplicated(collapse) > 0) {
+        collapse <- unique(collapse)
+        # if context is consistent with one single region, add label 
+        if (length(collapse) == 1) {
+          labels[[i]] <- append(labels[[i]], contexts[j])
+          next
+        }
+      } 
       
       # compare score of collapsed vs separated parts
-      tmp_counts <- matrix(colSums(part_counts[parts,]), nrow = 1)
-      tmp_size   <- sum(part_size[parts])
-      tmp_score  <- famscore_bdeu_byrow(tmp_counts, ess, r, q, tmp_size)
-      diff  <-  tmp_score - sum(part_scores[parts])
+      tmp_counts <- colSums(part_counts[collapse,])
+      tmp_size   <- sum(part_size[collapse])
+      tmp_score  <- famscore_bdeu_1row(tmp_counts, ess, r, q, tmp_size)
+      diff  <-  tmp_score - sum(part_scores[collapse])
       
       if (diff > best_diff) {
         best_diff <- diff
-        best_lab  <- list(node = i, context = context, parts = parts)
+        best_lab  <- list(node = i, context = contexts[j], parts = collapse)
         keep_climb <- TRUE
       }
     }
   }
     
   if (keep_climb) {
-    if (verbose) cat("\nbest label:", unlist(best_lab)[1:2], "\n")
+    if (verbose) cat("\nbest label:", unlist(best_lab), "\n")
     
     # update labels and partition
     labels[[best_lab$node]] <- append(labels[[best_lab$node]], best_lab$context)
