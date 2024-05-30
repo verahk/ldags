@@ -1,7 +1,9 @@
 
 # Check convergence of MCMC-chain of DAGs
 # - For each local-struct and MCMC-scheme, run 2 MCMC-runs and compare the edge-weights
-bn <- readRDS("./data/child.rds")
+
+bnname <- "sachs"
+bn <- readRDS(sprintf("./data/%s.rds", bnname))
 N <- 1000
 ess <- 1
 edgepf <- .25
@@ -23,7 +25,7 @@ for (local_struct in c("tree", "ldag", "dag")) {
     edgeps_dag <- lapply(smpls, BiDAG::edgep, pdag = F)
     edgeps_pdag <- lapply(smpls, BiDAG::edgep, pdag = T)
     
-    png(filename = sprintf("./simulations/bn/edgeps_child_%s_%s.png", local_struct, algo))
+    png(filename = sprintf("./simulations/bn/edgeps_%s_%s_%s.png", bnname, local_struct, algo))
     par(mar = c(2, 2, 0, 1))
     nf <- layout(matrix(c(1, 1, 1, 2, 3, 4), nrow = 2, byrow = T), heights = c(.6, 3))
     layout.show(nf)
