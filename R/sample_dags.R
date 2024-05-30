@@ -30,7 +30,6 @@
 #'
 #' @examples
 #' bn <- example_bn("LDAG10")
-#' bn <- readRDS("./data/alarm.rds")
 #' nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
 #' data <- bida:::sample_data_from_bn(bn, 1000)
 #' lookup <- rlang::new_environment() 
@@ -44,6 +43,8 @@
 #'                dag  = c(BiDAG::edgep(smpl_dag)))
 #'                
 #' pairs(edgep)
+#' 
+#' profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
 sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
   hardlimit <- min(ncol(data)-1, hardlimit)
   
