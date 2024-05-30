@@ -30,8 +30,9 @@
 #'
 #' @examples
 #' bn <- example_bn("LDAG10")
+#' bn <- readRDS("./data/alarm.rds")
+#' nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
 #' data <- bida:::sample_data_from_bn(bn, 1000)
-#' nlev <- rep(2, 10) # binary data 
 #' lookup <- rlang::new_environment() 
 #' 
 #' smpl_tree <- sample_dags(data, nlev, algo = "order", local_struct = "tree", verbose = T, lookup = lookup)
@@ -43,7 +44,7 @@
 #'                dag  = c(BiDAG::edgep(smpl_dag)))
 #'                
 #' pairs(edgep)
-sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = 1, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
+sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
   hardlimit <- min(ncol(data)-1, hardlimit)
   
   # genereate data.frame, removing unobserved levels in data, as required by BiDAG
@@ -86,7 +87,7 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = 1, har
                         parentnodes, 
                         ess = scorepar$ess,
                         method = scorepar$local_struct, 
-                        lookup = scorepar$lookup) - length(parentnodes)*log(scorepar$edgepf)
+                        lookup = scorepar$lookup) + length(parentnodes)*log(scorepar$edgepf)
     }
     assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
   }
