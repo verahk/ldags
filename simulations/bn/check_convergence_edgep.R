@@ -4,17 +4,20 @@
 bn <- readRDS("./data/child.rds")
 N <- 1000
 ess <- 1
-edgepf <- .5
-hardlimit <- 5
+edgepf <- .25
+hardlimit <- 4
 set.seed(007)
 data <- bida:::sample_data_from_bn(bn, N)
 nlev <- sapply(bn, function(x) dim(x$prob)[1])
 
 for (local_struct in c("tree", "ldag", "dag")) {
   for (algo in c("order", "partition")) {
+    cat("\n Local structure:", local_struct, "Algo:", algo)
+    tic <- Sys.time()
     smpls <- replicate(2, ldags::sample_dags(data, nlev, algo = algo,
                                            ess = ess, edgepf = edgepf, hardlimit = hardlimit, 
                                            local_struct = local_struct, verbose = T), simplify = F)
+    print(Sys.time()-tic)
     
     trace <- sapply(smpls, "[[", "trace")
     edgeps_dag <- lapply(smpls, BiDAG::edgep, pdag = F)

@@ -3,7 +3,6 @@ title: 'Simulation: Sample DAGs with local structure'
 author: "Vera Kvisgaard"
 date: "2024-05-24"
 output:
-  pdf_document: default
   html_document: default
 ---
 
@@ -39,66 +38,26 @@ Rgraphviz::plot(bnlearn::as.graphNEL(bn))
 ```
 
 
-## Convergence
+# Convergence 
+![Network: child](edgeps_child_tree_order.png){ width=50% }
+![Network: child](edgeps_child_tree_order.png){ width=50% }
 
-![](./edgep_)
+![Network: child](edgeps_child_ldag_order.png){ width=50% }
+![Network: child](edgeps_child_ldag_partition.png){ width=50% }
 
-# Run 
-Define simulation routine.
-```{r}
-run <- function(bn, r, N, m, algo = "order", write_to_file = T, verbose = T)  {
+![Network: child](edgeps_child_dag_order.png){ width=50% }
+![Network: child](edgeps_child_dag_partition.png){ width=50% }
 
-  # sample data
-  set.seed(r+N)
-  data <- bida:::sample_data_from_bn(bn, N)
-  nlev <- sapply(bn, function(x) dim(x$prob)[1])
-  
-  filename <- sprintf("alarm_%s_%s_N%s_r%02.0f.rds", algo, m, N, r)
-  filepath <- here::here("./simulations/bn/MCMCchains/", filename)
-  if (file.exists(filepath) && write_to_file) next
-  
-  if (verbose) cat(filename)
-  
-  local_struct <- switch(tolower(m), "dag" = NULL, m)
-  lookup <- rlang::new_environment()
-  smpl <- ldags::sample_dags(data, nlev, algo, 
-                             ess = 1, edgepf = 2, hardlimit = 5, 
-                             local_struct = local_struct, lookup = lookup, verbose = verbose)
- 
-  out <- list(smpl = smpl, lookup = lookup)
-  if (write_to_file) {
-    saveRDS(out, filepath)
-  } 
-  return(out)
-}
-```
+
 
 
 ```{r}
-if (doRun) {
-  # test
-  res <- run(bn, 1, 100, "tree", T, T)
-  res <- run(bn, 1, 100, "ldag", T, T)
-  test <- readRDS(here::here("./simulations/bn/MCMCchains/alarm_orderMCMC_ldag_N100_r01.rds"))
-  
-  if (length(cl) > 1) {
-    registerDoSNOW(cl)
-    foreach(r = simpar$r, N = simpar$N, m = simpar$method,
-         .packages = c("ldags", "BiDAG")) %dopar% run(bn, r, N, m, "order", T, T)
-    foreach(r = simpar$r, N = simpar$N, m = simpar$method,
-         .packages = c("ldags", "BiDAG")) %dopar% run(bn, r, N, m, "partition", T, T)
-    stopCluster(cl)
-  } else {
-    for (i in 1:nrow(simpar)) {
-      run(bn, simpar$r[i], simpar$N[i], T, T)
-    }
-  }
-}
+
 
 ```
 # Evaluate 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 library(ggplot2)
 library(dplyr)
 
@@ -110,7 +69,7 @@ colnames(par) <- c("alg", "locals", "N", "r")
 par$N <- factor(par$N, c("N100", "N300", "N1000", "N3000"))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 compute_posterior_probs <- function(smpl, burninsamples) {
 
   # list unique DAGs
@@ -182,7 +141,7 @@ avgppv <- function(x, which_true) {
 }
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 
 res <- lapply(filepaths[indx], 
