@@ -20,7 +20,7 @@
 #' -  additional output from the different optimization procedures.n
 #' @export
 optimize_partition <- function(counts, levels, ess, method, make_regular = F, verbose = FALSE){
-  
+  method <- match.arg(method, c("tree", "ldag", "part"))
   res <- switch(method, 
                "tree" = optimize_partition_tree(counts, levels, ess, verbose = verbose),
                "ldag" = optimize_partition_ldag(counts, levels, ess, verbose = verbose),

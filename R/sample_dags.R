@@ -45,8 +45,10 @@
 #' pairs(edgep)
 #' 
 #' profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
-sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
+sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = .5, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
+  
   hardlimit <- min(ncol(data)-1, hardlimit)
+  algo <- match.arg(algo, c("order", "algo"))
   
   # genereate data.frame, removing unobserved levels in data, as required by BiDAG
   df <- data.frame(apply(data, 2, factor, exclude = NULL, simplify = FALSE))
@@ -111,7 +113,19 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, ha
 
   # sample DAGs 
   if (verbose) cat("\nSample DAGs using BiDAG::sampleBN\n")
-  smpl     <- BiDAG::sampleBN(scorepar, algo, scoretable = BiDAG::getSpace(iterfit), verbose = T)
+  scoretab <- BiDAG::getSpace(iterfit)
+  stopifnot(!is.null(scoretab$adjacency))
+  startskeleton <- scoretab$adjacency
+  smpl     <- BiDAG::sampleBN(scorepar, algo, scoretable = scoretab, verbose = verbose)
+                              #plus1 = FALSE,                   #
+                              #startspace = scoretab$adjacency) # should be ignored when scoretable is given
+
+   # if (algo == "order") {
+   #   smpl <- BiDAG:::orderMCMC(scorepar, scoretable = scoretab, MAP = FALSE, plus1 = F, verbose = verbose)
+   # } else if (algo == "partition") {
+   #   smpl <- BiDAG:::partitionMCMC(scorepar, scoretable = scoretab, verbose = T)
+   # }
+   # 
   tic <- c(tic, sampleBN = Sys.time())
   
   # add time-tracking as an attribute

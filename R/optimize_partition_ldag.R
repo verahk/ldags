@@ -17,6 +17,7 @@
 optimize_partition_ldag <- function(counts, levels, ess, 
                                     P = as.list(1:nrow(counts)-1), 
                                     labels = rep(list(integer()), length(levels)), 
+                                    conf = bida:::expand_grid_fast(levels, nlev),
                                     verbose = FALSE){
   
   r <- ncol(counts)
@@ -24,8 +25,6 @@ optimize_partition_ldag <- function(counts, levels, ess,
   
   nlev <- lengths(levels)
   stride <- c(1, cumprod(nlev[-length(nlev)]))
-  
-  conf <- bida:::expand_grid_fast(levels, nlev)
   conf_enum <- seq_len(nrow(conf))-1 
   #conf_enum_par <- conf_enum - sweep(conf, 2, stride, "*")
   
@@ -91,7 +90,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
     labels[[best_lab$node]] <- append(labels[[best_lab$node]], best_lab$context)
     P <- c(P[-best_lab$parts], list(unlist(P[best_lab$parts])))
     
-    return(optimize_partition_ldag(counts, levels, ess, P, labels, verbose))
+    return(optimize_partition_ldag(counts, levels, ess, P, labels, conf, verbose))
     
   } else {
     return(list(partition = P,
