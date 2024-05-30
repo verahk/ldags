@@ -51,14 +51,8 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, ha
   df <- data.frame(apply(data, 2, factor, exclude = NULL, simplify = FALSE))
   
   # define scoreparameters 
-  if (is.null(local_struct)) {
-    scorepar <- BiDAG::scoreparameters("bdecat", 
-                                       data = df, 
-                                       bdecatpar = list(chi = ess, 
-                                                        edgepf = edgepf))
-    
-  } else {
-    
+  if (! is.null(local_struct) && local_struct %in% c("tree", "ldag")) {
+
     scorepar <- BiDAG::scoreparameters("usr", 
                                        data = data, 
                                        usrpar = list(pctesttype = "bdecat"))
@@ -90,6 +84,11 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, ha
                         lookup = scorepar$lookup) + length(parentnodes)*log(scorepar$edgepf)
     }
     assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
+  } else {
+    scorepar <- BiDAG::scoreparameters("bdecat", 
+                                       data = df, 
+                                       bdecatpar = list(chi = ess, 
+                                                        edgepf = edgepf))
   }
   
   tic <- Sys.time()
@@ -110,7 +109,7 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = .5, ha
   tic <- c(tic, learnBN = Sys.time())
 
   # sample DAGs 
-  if (verbose) cat("\nDefine search space using BiDAG::sampleBN\n")
+  if (verbose) cat("\nSample DAGs using BiDAG::sampleBN\n")
   smpl     <- BiDAG::sampleBN(scorepar, algo, scoretable = BiDAG::getSpace(iterfit), verbose = T)
   tic <- c(tic, sampleBN = Sys.time())
   
