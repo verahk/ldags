@@ -27,7 +27,7 @@ simpar <- expand.grid(list(method = c("ldag", "tree", "dag"),
                            N = c(100, 1000, 10000),
                            r = 1:30))
 cl <- makeCluster(4)
-doRun <- T
+doRun <- F
 ```
 
 Draw a random network based on labeled DAG with 10 nodes.
@@ -37,6 +37,11 @@ n  <- length(bn)
 dindx <- diag(n) == 1
 Rgraphviz::plot(bnlearn::as.graphNEL(bn))
 ```
+
+
+## Convergence
+
+![](./edgep_)
 
 # Run 
 Define simulation routine.
@@ -54,7 +59,7 @@ run <- function(bn, r, N, m, algo = "order", write_to_file = T, verbose = T)  {
   
   if (verbose) cat(filename)
   
-  local_struct <- switch(m, "DAG" = NULL, m)
+  local_struct <- switch(tolower(m), "dag" = NULL, m)
   lookup <- rlang::new_environment()
   smpl <- ldags::sample_dags(data, nlev, algo, 
                              ess = 1, edgepf = 2, hardlimit = 5, 
