@@ -46,10 +46,13 @@
 sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = 1, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
   hardlimit <- min(ncol(data)-1, hardlimit)
   
+  # genereate data.frame, removing unobserved levels in data, as required by BiDAG
+  df <- data.frame(apply(data, 2, factor, exclude = NULL, simplify = FALSE))
+  
   # define scoreparameters 
   if (is.null(local_struct)) {
     scorepar <- BiDAG::scoreparameters("bdecat", 
-                                       data = as.data.frame(data), 
+                                       data = df, 
                                        bdecatpar = list(chi = ess, 
                                                         edgepf = edgepf))
     
@@ -96,7 +99,6 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = 1, har
   #                         labels = colnames(data), verbose = verbose, m.max = hardlimit) 
   # tic <- c(tic, skel = Sys.time())
   if (verbose) cat("\nLearn initial CPDAG using bnlearn::hc\n")
-  df    <- data.frame(apply(data, 2, factor, simplify = F))
   cpdag <- bnlearn:::hc(df, maxp = hardlimit)
   skel <- bnlearn::amat(cpdag)
   tic <- c(tic, hc = Sys.time())
@@ -113,6 +115,7 @@ sample_dags <- function(data, nlev, algo = "partition", ess = 1, edgepf = 1, har
   
   # add time-tracking as an attribute
   attr(smpl, "toc") <- diff(tic)
+  attr(smpl, "call") <- match.call()
   
   return(smpl)
 }
