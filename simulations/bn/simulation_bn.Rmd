@@ -57,7 +57,7 @@ run <- function(bn, r, N, m, algo = "order", write_to_file = T, verbose = T)  {
   local_struct <- switch(m, "DAG" = NULL, m)
   lookup <- rlang::new_environment()
   smpl <- ldags::sample_dags(data, nlev, algo, 
-                             ess = 1, edgepf = 2, hardlimit = 2, 
+                             ess = 1, edgepf = 2, hardlimit = 5, 
                              local_struct = local_struct, lookup = lookup, verbose = verbose)
  
   out <- list(smpl = smpl, lookup = lookup)
