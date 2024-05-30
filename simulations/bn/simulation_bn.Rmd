@@ -1,0 +1,224 @@
+---
+title: 'Simulation: Sample DAGs with local structure'
+author: "Vera Kvisgaard"
+date: "2024-05-24"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.show = "hold",
+	results = "hold"
+)
+```
+
+
+# Prep
+```{r}
+library(doSNOW)
+library(BiDAG)
+library(ldags)
+here::i_am("./simulations/bn/simulation_bn.Rmd")
+simpar <- expand.grid(list(method = c("ldag", "tree", "dag"),
+                           N = c(100, 1000, 10000),
+                           r = 1:30))
+cl <- makeCluster(4)
+doRun <- T
+```
+
+Draw a random network based on labeled DAG with 10 nodes.
+```{r}
+bn <- readRDS(here::here("./data/alarm.rds"))
+n  <- length(bn)
+dindx <- diag(n) == 1
+Rgraphviz::plot(bnlearn::as.graphNEL(bn))
+```
+
+# Run 
+Define simulation routine.
+```{r}
+run <- function(bn, r, N, m, algo = "order", write_to_file = T, verbose = T)  {
+
+  # sample data
+  set.seed(r+N)
+  data <- bida:::sample_data_from_bn(bn, N)
+  nlev <- sapply(bn, function(x) dim(x$prob)[1])
+  
+  filename <- sprintf("alarm_%s_%s_N%s_r%02.0f.rds", algo, m, N, r)
+  filepath <- here::here("./simulations/bn/MCMCchains/", filename)
+  if (file.exists(filepath) && write_to_file) next
+  
+  if (verbose) cat(filename)
+  
+  local_struct <- switch(m, "DAG" = NULL, m)
+  lookup <- rlang::new_environment()
+  smpl <- ldags::sample_dags(data, nlev, algo, 
+                             ess = 1, edgepf = 2, hardlimit = 2, 
+                             local_struct = local_struct, lookup = lookup, verbose = verbose)
+ 
+  out <- list(smpl = smpl, lookup = lookup)
+  if (write_to_file) {
+    saveRDS(out, filepath)
+  } 
+  return(out)
+}
+```
+
+
+```{r}
+if (doRun) {
+  # test
+  res <- run(bn, 1, 100, "tree", T, T)
+  res <- run(bn, 1, 100, "ldag", T, T)
+  test <- readRDS(here::here("./simulations/bn/MCMCchains/alarm_orderMCMC_ldag_N100_r01.rds"))
+  
+  if (length(cl) > 1) {
+    registerDoSNOW(cl)
+    foreach(r = simpar$r, N = simpar$N, m = simpar$method,
+         .packages = c("ldags", "BiDAG")) %dopar% run(bn, r, N, m, "order", T, T)
+    foreach(r = simpar$r, N = simpar$N, m = simpar$method,
+         .packages = c("ldags", "BiDAG")) %dopar% run(bn, r, N, m, "partition", T, T)
+    stopCluster(cl)
+  } else {
+    for (i in 1:nrow(simpar)) {
+      run(bn, simpar$r[i], simpar$N[i], T, T)
+    }
+  }
+}
+
+```
+# Evaluate 
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+filepaths <- list.files(here::here("./simulations/LDAG10/MCMCchains"), pattern = ".rds", full.names = T)
+indx <- apply(sapply(sprintf("partitionMCMC.+_N%s_r%02.0f.rds", simpar$N, simpar$r), grepl, x = filepaths), 1, any)
+
+par <- data.frame(stringr::str_split(filepaths[indx], ".+MCMCchains/|_|.rds", simplify = T)[, 2:5])
+colnames(par) <- c("alg", "locals", "N", "r")
+par$N <- factor(par$N, c("N100", "N300", "N1000", "N3000"))
+```
+
+```{r}
+compute_posterior_probs <- function(smpl, burninsamples) {
+
+  # list unique DAGs
+  dags <- lapply(smpl$traceadd$incidence[-burninsamples], as.matrix)
+  u    <- unique(dags)
+  support  <- bida:::rowsum_fast(rep(1/length(dags), length(dags)), dags, u)
+  dags <- u 
+  dmats <- lapply(dags, bida:::descendants)
+  
+  list(edgep = Reduce("+", Map("*", dags, support)),
+       ancp  = Reduce("+", Map("*", dmats, support)))
+}
+
+probs <- lapply(filepaths[indx], function(f) compute_posterior_probs(readRDS(f), seq_len(200)))
+edgeps <- lapply(probs, "[[", "edgep")
+avgs <- lapply(split(edgeps, par[, c("locals", "N")], drop = T),
+                   function(x) Reduce("+", x)/length(x))
+
+plot_edgep <- function(mats, dag, cpdag) {
+  df <- cbind(expand.grid(dimnames(mats[[1]])), 
+              dag.cpdag = interaction(dag, cpdag), 
+              sapply(mats, c))
+  df_long <- tidyr:::pivot_longer(df, names(mats))
+  plot <- ggplot(df_long, aes(Var2, Var1, size = value, color = dag.cpdag)) +
+    facet_grid(.~name) +
+    geom_point() +
+    scale_y_discrete(limits=rev) 
+  return(plot)
+}
+
+plot_edgep(avgs[grepl("N1000", names(avgs))], bnlearn::amat(bn), as(pcalg::dag2cpdag(bnlearn::as.graphNEL(bn)), "matrix"))
+
+```
+
+```{r}
+# evaluate ----
+eval_smpl <- function(smpl, burninsamples, dag, dmat) {
+  dindx <- diag(ncol(dag)) == 1 
+  
+  # list unique DAGs
+  dags <- lapply(smpl$traceadd$incidence[-burninsamples], as.matrix)
+  u    <- unique(dags)
+  support  <- bida:::rowsum_fast(rep(1/length(dags), length(dags)), dags, u)
+  dags <- u 
+  dmats <- lapply(dags, bida:::descendants)
+  
+  edgep <- Reduce("+", Map("*", dags, support))[!dindx]
+  ancp  <-  Reduce("+", Map("*", dmats, support))[!dindx]
+  
+  # compute edge prob and ARP
+  list(edgep = compute_prec_recall(edgep, dag[!dindx]),
+       ancp =  compute_prec_recall(ancp, dmat[!dindx]),
+       avgppv = c(edgep = avgppv(edgep, which(dag[!dindx]==1)),
+                  ancp = avgppv(ancp, which(dmat[!dindx]==1))))
+}
+
+compute_prec_recall <- function(x, y) {
+  indx <- order(x + runif(length(x))/1000, decreasing = TRUE)
+  tp  <- cumsum(y[indx])
+  cbind(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(y))
+}
+
+# avg ppv 
+avgppv <- function(x, which_true) {
+  np  <- (length(x)-rank(x+runif(length(x))/1000) +1)  # number of instances with equal to or lower values of x
+  pp  <- np[which_true]                               # number of positive predictions at each true positive    
+  ppv <- seq_along(pp)/sort(pp)                       # precision at each positive
+  mean(ppv)
+}
+```
+
+```{r}
+
+
+res <- lapply(filepaths[indx], 
+              function(f) eval_smpl(readRDS(f), seq_len(200), bnlearn::amat(bn), bida:::descendants(bn)))
+# res <- list()
+# for (f in filepaths[indx]) {
+#   res[[f]] <- eval_smpl(readRDS(f), seq_len(200), bnlearn::amat(bn), bida:::descendants(bn))
+# }
+
+                                                                           
+## ancestor relation
+df <- data.frame(par[rep(seq_along(res), each = n*(n-1)), ], 
+                 do.call(rbind, lapply(res, "[[", "ancp")))
+
+ggplot(df, aes(TPR, PPV, group = interaction(N, r))) +
+  facet_grid(N~locals) +
+  geom_hline(yintercept = mean(bida:::descendants(bn)[!dindx]), color = "red") +
+  geom_line() +
+  ggtitle("Ancestor relation probabilities")
+
+
+
+## edge probs
+df <- data.frame(par[rep(seq_along(res), each = n*(n-1)), ], 
+                 do.call(rbind, lapply(res, "[[", "edgep")))
+
+ggplot(df, aes(TPR, PPV, group = interaction(N, r))) +
+  facet_grid(N~locals) +
+  geom_hline(yintercept = mean(bnlearn::amat(bn)[!dindx]), color = "red") +
+  geom_line() + 
+  ggtitle("Edge probabilities")
+
+
+## avgppv 
+df <- data.frame(par, 
+                 do.call(rbind, lapply(res, "[[", "avgppv")))
+df_long <- tidyr:::pivot_longer(df, cols = c("edgep", "ancp"))
+ggplot(df_long, aes(N, value, fill = name)) +
+  facet_grid(.~locals) +
+  geom_boxplot() +
+  ggtitle("Average precision")
+```
+
+
