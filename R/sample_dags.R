@@ -45,10 +45,10 @@
 #' pairs(edgep)
 #' 
 #' profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
-sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = .5, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
+sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = 2, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
   
   hardlimit <- min(ncol(data)-1, hardlimit)
-  algo <- match.arg(algo, c("order", "algo"))
+  algo <- match.arg(algo, c("order", "partition"))
   
   # genereate data.frame, removing unobserved levels in data, as required by BiDAG
   df <- data.frame(apply(data, 2, factor, exclude = NULL, simplify = FALSE))
@@ -84,7 +84,7 @@ sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = .5, hardli
                         parentnodes, 
                         ess = scorepar$ess,
                         method = scorepar$local_struct, 
-                        lookup = scorepar$lookup) + length(parentnodes)*log(scorepar$edgepf)
+                        lookup = scorepar$lookup) - length(parentnodes)*log(scorepar$edgepf)
     }
     assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
   } else {
@@ -130,7 +130,7 @@ sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = .5, hardli
   
   # add time-tracking as an attribute
   attr(smpl, "toc") <- diff(tic)
-  attr(smpl, "call") <- match.call()
+  attr(smpl, "params") <- list(algo = algo, ess = ess, edgepf = edgepf, hardlimit = hardlimit, local_struct = m)
   
   return(smpl)
 }

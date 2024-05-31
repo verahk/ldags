@@ -7,9 +7,9 @@
 sample_dags(
   data,
   nlev,
-  algo = "partition",
+  algo = "order",
   ess = 1,
-  edgepf = 1,
+  edgepf = 2,
   hardlimit = 5,
   local_struct = NULL,
   verbose = FALSE,
@@ -51,9 +51,19 @@ the maximum number of parents.
 }
 \examples{
 bn <- example_bn("LDAG10")
+nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
 data <- bida:::sample_data_from_bn(bn, 1000)
-nlev <- rep(2, 10) # binary data 
 lookup <- rlang::new_environment() 
 
-smpl <- sample_dags(data, nlev, algo = "order", local_struct = "tree", verbose = T, lookup)
+smpl_tree <- sample_dags(data, nlev, algo = "order", local_struct = "tree", verbose = T, lookup = lookup)
+smpl_ldag <- sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup)
+smpl_dag  <- sample_dags(data, nlev, algo = "order", local_struct = NULL, verbose = T, lookup = lookup)    
+
+edgep <- cbind(tree = c(BiDAG::edgep(smpl_tree)), 
+               ldag = c(BiDAG::edgep(smpl_ldag)),
+               dag  = c(BiDAG::edgep(smpl_dag)))
+               
+pairs(edgep)
+
+profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
 }

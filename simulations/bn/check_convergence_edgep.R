@@ -2,11 +2,11 @@
 # Check convergence of MCMC-chain of DAGs
 # - For each local-struct and MCMC-scheme, run 2 MCMC-runs and compare the edge-weights
 
-bnname <- "sachs"
+bnname <- "LDAG10"
 bn <- readRDS(sprintf("./data/%s.rds", bnname))
 N <- 1000
 ess <- 1
-edgepf <- .25
+edgepf <- 2
 hardlimit <- 4
 set.seed(007)
 data <- bida:::sample_data_from_bn(bn, N)

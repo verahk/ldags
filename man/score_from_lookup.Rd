@@ -11,7 +11,7 @@ score_from_lookup(
   j,
   parentnodes,
   ess,
-  local_struct,
+  method,
   lookup
 )
 }

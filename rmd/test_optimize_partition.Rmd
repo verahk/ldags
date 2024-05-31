@@ -61,6 +61,7 @@ levels <- rep(list(0:1), 2)
 counts <- cbind(c(100, 10, 10, 10), c(10, 100, 100, 100))
 tester(counts, levels)
 ```
+
 ```{r}
 cat("Score, P(Y|X1, X2):")
 sum(famscore_bdeu_byrow(counts, ess = 1, r = 2, q = 4, s = 1))
@@ -77,12 +78,13 @@ Test the `score_from_lookup` function. For a given node `j` and parent set `pare
 n <- 5
 levels <- rep(list(0:1), n)
 data <- sapply(levels, sample, size = 100, replace = T)
-tab <- ldags:::init_lookup_scoretable(n, list(ess = 1))
+tab <- rlang::new_environment(list(tree = list()))
+ess <- 1
 
 cat("\nEmpty parent set (no CPT-partition-optimization):")
 j <- 1
 parentnodes <- vector("integer")
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = "tree", lookup = tab)
+ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, ess, method = "tree", lookup = tab)
 ls.str(tab)
 ```
 
@@ -91,7 +93,7 @@ ls.str(tab)
 cat("\nOne parent (no CPT-partition-optimization):")
 j <- 1
 parentnodes <- 2
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = "tree", lookup = tab)
+ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, ess, method = "tree", lookup = tab)
 ls.str(tab)
 ```
 
@@ -99,7 +101,7 @@ ls.str(tab)
 cat("\nMultiple parents:")
 j <- 1
 parentnodes <- 2:5
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = "tree", lookup = tab)
+ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, ess, method = "tree", lookup = tab)
 ls.str(tab)
 ```
 
@@ -108,7 +110,6 @@ ls.str(tab)
 n <- 3
 levels <- rep(list(0:1), n)
 data <- replicate(n, sample(0:1, 100, T))
-
 ```
 
 ```{r}
@@ -194,7 +195,7 @@ for (i in 1:ncol(dag)) {
   if (length(pa) > 1) {
      labs <- labmat[pa, i]
      if (any(lengths(labs) > 0)) {
-       partitions[[i]] <- labels_to_partition(labs, levels[pa], enumerate = T)
+       partitions[[i]] <- labels_to_partition(labs, levels[pa], type = "outcome_vectors")
      }
   }
 }
@@ -213,7 +214,8 @@ scorepar <- scoreparameters("usr",
 
 scorepar$Cvec <- nlev
 scorepar$levels <- lapply(scorepar$Cvec-1, seq.int, from = 0)
-scorepar$lookup  <- init_lookup_scoretable(n, list(ess = 1))
+scorepar$lookup  <- rlang::new_environment(list())
+scorepar$ess <- 1
 ls.str(scorepar$lookup)
 
 # wrapper function
@@ -223,6 +225,7 @@ usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
                     nlev = scorepar$Cvec, 
                     j, 
                     parentnodes, 
+                    ess = scorepar$ess,
                     method = scorepar$optPartMethod, 
                     lookup = scorepar$lookup)
 }
@@ -235,7 +238,7 @@ assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
 ```{r}
 for (optPartMethod in c("tree", "ldag", "part")){
   scorepar$optPartMethod <- optPartMethod
-  scorepar$tab[[optPartMethod]] <- rep(list(list()), ncol(dag))
+  assign(optPartMethod, list(), scorepar$lookup)
   print(usrDAGcorescore(1, integer(0), ncol(dag), scorepar))
   print(usrDAGcorescore(1, 2, ncol(dag), scorepar))
   print(usrDAGcorescore(1, 2:3, ncol(dag), scorepar))
@@ -250,13 +253,43 @@ for (optPartMethod in c("ldag", "tree")) {
   scorepar$optPartMethod <- optPartMethod
   scorepar$lookup[[optPartMethod]] <- rep(list(list()), ncol(dag))
   res[[optPartMethod]] <- sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3)
-  
   #tryCatch(sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3), 
   #         warning = function(cond) stop())
 }
 ```
 
 
+```{r}
+bn <- readRDS(here::here("./data/LDAG10.rds"))
+j <- 7
+levels <- rep(list(0:1), 10)
+nlev <- lengths(levels)
+parentnodes <- which(bnlearn::amat(bn)[, j] == 1)
+
+samplesizes <- c(100, 300, 1000, 3000, 10000)
+scores <- matrix(nrow = length(samplesizes), ncol = 3)
+colnames(scores) <- c("tree", "ldag", "dag")
+for (i in seq_along(samplesizes)) {
+  data <- bida:::sample_data_from_bn(bn, samplesizes[i])
+  scores[i, 1] <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, "tree", NULL)
+  scores[i, 2]  <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, "ldag", NULL)
+  scores[i, 3]  <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, NULL, NULL)
+}
+
+scores
+
+data <- bida:::sample_data_from_bn(bn, 300)
+counts <- compute_freq_table(data, nlev, j, parentnodes)
+tree <- optimize_partition(counts, levels[parentnodes], 1, "tree")
+ldag <- optimize_partition(counts, levels[parentnodes], 1, "ldag")
+
+cpt <- round(matrix(aperm(bn[[7]]$prob, paste0("X", c(parentnodes, j))), ncol = 2), 2)
+
+cbind(expand.grid(levels[parentnodes]), 
+      cpt, 
+      tree = unlist_partition(tree$partition),
+      ldag = unlist_partition(ldag$partition))
+```
 
 
 

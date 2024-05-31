@@ -31,6 +31,7 @@ optimize_partition_ldag(
   ess,
   P = as.list(1:nrow(counts) - 1),
   labels = rep(list(integer()), length(levels)),
+  conf = bida:::expand_grid_fast(levels, nlev),
   verbose = FALSE
 )
 
@@ -77,12 +78,12 @@ optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
 # mixed cardinality
 levels <- list(0:1, 0:2)
 counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
-res <- optimize_partition_ldag(counts, levels, ess = ess, verbose = T)
+res <- optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
 cbind(expand.grid(levels), n = counts, part = unlist_partition(res$partition))
 
 # binary tree
 levels <- list(0:1, 0:1)
-counts <- cbind(c(10, 1000, 1000, 1000), rep(1, 4))
+counts <- cbind(c(10, 100, 100, 100), 1)
 ess <- 1
 res <- optimize_partition_tree(counts, levels, ess = ess, verbose = TRUE)
 res$partition 
