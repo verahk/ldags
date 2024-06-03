@@ -75,6 +75,12 @@ example_bn <- function(name) {
     nlev <- rep(2, ncol(dag))
     bn <- rand_bn(dag, partitions, nlev, alpha = 1)
     return(bn)
+    
+    # test
+    # i <- 7
+    # pa  <- which(dag[, i] == 1)
+    # tmp <- matrix(aperm(bn[[i]]$prob, c(1:length(pa)+1, 1)), ncol = nlev[i])
+    # cbind(expand.grid(levels[pa]), unlist_partition(partitions[[i]]), tmp)
   }
   
   # return bn.fit object

@@ -45,6 +45,8 @@
 #' pairs(edgep)
 #' 
 #' profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
+
+
 sample_dags <- function(data, nlev, algo = "order", ess = 1, edgepf = 2, hardlimit = 5, local_struct = NULL, verbose = FALSE, lookup = NULL) {
   
   hardlimit <- min(ncol(data)-1, hardlimit)

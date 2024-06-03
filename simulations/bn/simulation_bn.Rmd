@@ -21,6 +21,7 @@ knitr::opts_chunk$set(
 # Prep
 ```{r message=FALSE}
 library(doSNOW)
+library(foreach)
 library(BiDAG)
 library(ldags)
 library(ggplot2)
@@ -29,22 +30,8 @@ here::i_am("./simulations/bn/simulation_bn.Rmd")
 simpar <- expand.grid(list(method = c("ldag", "tree", "dag"),
                            N = c(100, 1000, 10000),
                            r = 1:30))
-cl <- makeCluster(4)
 doRun <- F
 ```
-
-
-# Convergence diagnostics
-The plots shows traceplots and posterior edge probabilities from two subsequent MCMC runs on the same data set, sampled from the LDAG10 network. 
-
-![Network: child](edgeps_LDAG10_tree_order.png){ width=50% }
-![Network: child](edgeps_LDAG10_tree_partition.png){ width=50% }
-
-![Network: child](edgeps_LDAG10_ldag_order.png){ width=50% }
-![Network: child](edgeps_LDAG10_ldag_partition.png){ width=50% }
-
-![Network: child](edgeps_LDAG10_dag_order.png){ width=50% }
-![Network: child](edgeps_LDAG10_dag_partition.png){ width=50% }
 
 
 
@@ -57,125 +44,153 @@ The plots shows traceplots and posterior edge probabilities from two subsequent 
 library(ggplot2)
 library(dplyr)
 
-filepaths <- list.files(here::here("./simulations/bn/MCMCchains"), pattern = "epf.+.rds", full.names = T)
-tmp <- stringr::str_split(filepaths, ".+MCMCchains/|_|.rds", simplify = F)
 
-par <- data.frame(do.call(rbind, tmp)[, 2:7])
-colnames(par) <- c("network", "algo", "struct", "N", "epf", "r")
-par$N <- factor(par$N, c("N100", "N300", "N1000", "N3000", "N10000"))
-stopifnot(length(unique(par$epf)) ==  2)
+
 ```
 
-```{r }
-compute_posterior_probs <- function(smpl, burninsamples) {
+```{r}
+eval_files <- function(filepaths, bnname) {
+  
+  indx <- grepl(bnname, filepaths, T)
+  if (!all(indx)) stop("All files do not match bnname.")
+  
+  bn <- readRDS(here::here("./data/", paste0(bnname, ".rds")))
+  n  <-  length(bn)
+  dindx <- diag(n) == 1
+  dag  <- bnlearn::amat(bn)[!dindx]
+  dmat <- bida:::descendants(bn)[!dindx]
+  
+  res <- foreach(f = filepaths, 
+                 .combine  = "rbind",
+                 .packages = "Matrix") %dopar% eval_MCMCchain(f, seq(200), dag, dmat, n)
+  
 
+}
+
+eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
+ # if (verbose) cat(f)
+  MCMCchain <- readRDS(f)$smpl
+  dindx <- diag(n) == 1
+  dags <- lapply(MCMCchain$traceadd$incidence[-burninsamples], as.matrix)
+  
   # list unique DAGs
-  dags <- lapply(smpl$traceadd$incidence[-burninsamples], as.matrix)
   u    <- unique(dags)
   support  <- bida:::rowsum_fast(rep(1/length(dags), length(dags)), dags, u)
   dags <- u 
   dmats <- lapply(dags, bida:::descendants)
   
-  list(edgep = Reduce("+", Map("*", dags, support)),
-       ancp  = Reduce("+", Map("*", dmats, support)))
+  edgep <- Reduce("+", Map("*", dags, support))[!dindx]
+  ancp  <- Reduce("+", Map("*", dmats, support))[!dindx]
+  
+  res <- matrix(nrow = 2, ncol = 3)
+  colnames(res) <- c("TPR", "FPR", "avgppv")
+  rownames(res) <- c("edgep", "ancp")
+
+  # edge probs
+  n1 <- sum(dag)
+  res[1, 1] <- sum(edgep[dag == 1])/n1
+  res[1, 2] <- sum(edgeps[dag == 0])/(n**2-n-n1)
+  res[1, 3] <- compute_avgppv(edgep, dag)
+  
+  # arp
+  n1 <- sum(dmat)
+  probs <- Reduce("+", Map("*", dmats, support))[!dindx]
+  res[2, 1] <- sum(ancp[dmat == 1])/n1
+  res[2, 2] <- sum(ancp[dmat == 0])/(n**2-n-n1)
+  res[2, 3] <- compute_avgppv(ancp, dmat)
+  
+  list(edgep = edgep, 
+       rates = res, 
+       pr = compute_prec_recall(ancp, dmat),
+       toc = as.matrix(attr(MCMCchain, "toc")))
+  
 }
-
-
-
 
 compute_prec_recall <- function(x, y) {
   indx <- order(x, decreasing = TRUE)
-  tp  <- cumsum(y[indx])
-  cbind(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(y))
+  tp   <- cumsum(y[indx])
+  cbind(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(x))
 }
 
-avgppv <- function(x, y) {
-  np  <- (length(x)-rank(x+runif(length(x))/1000) +1)  # number of instances with equal to or lower values of x
-  pp  <- np[y == 1] # number of positive predictions at each true positive     
-  # cbind(np, x, y)[order(x), ]
-  ppv <- seq_along(pp)/sort(pp)                       # precision at each positive
-  mean(ppv)
+compute_avgppv <- function(x, y) {
+  
+  indx <- order(x, decreasing = TRUE)
+  tp   <- cumsum(y[indx])
+  pp   <- seq_along(x)
+  
+  dups <- duplicated(x[indx], fromLast = TRUE)
+  #cbind(dups, x[indx], c(y[indx]), tp, pp)
+  w <- c(tp[1], diff(tp[!dups]))/tp[length(x)]
+  sum(w*tp[!dups]/pp[!dups])
 }
+res_to_df <- function(res, filepaths) {
+  
+  tmp <- stringr::str_split(filepaths, ".+MCMCchains/|_|.rds", simplify = F)
+  par <- data.frame(do.call(rbind, tmp)[, 2:7])
+  colnames(par) <- c("network", "algo", "struct", "N", "epf", "r")
+  par$N <- factor(par$N, c("N100", "N300", "N1000", "N3000", "N10000"))
+  
+  tmp <- do.call(rbind, res)
+  if (nrow(tmp) == length(filepaths)) {
+    return(cbind(par, tmp))
+  } else {
+    nrows <- vapply(res, nrow, integer(1))
+    df <- cbind(par[rep.int(seq_along(filepaths), nrows), ], tmp)
+    df$name <- rownames(tmp)
+    return(df)
+  }
+}
+
+plot_box_plot <- function(df, var, title = "") {
+  ggplot(df, aes(N, y = !! sym(var), fill = struct)) +
+   facet_grid(algo+name~network+epf) +
+   geom_boxplot() +
+   ggtitle(title)      
+}
+plot_prec_recall <- function(df, title = "") {
+   ggplot(df, aes(TPR, PPV, group = r)) +
+    facet_grid(algo+struct+epf~network+N) +
+    geom_line() +
+    ggtitle(title)
+}
+
+
+```
+
+```{r}
+cl <- makeCluster(6, type = "SOCK", outfile = "")
+clusterExport(cl, c("eval_MCMCchain", "compute_avgppv", "compute_prec_recall"))
+registerDoSNOW(cl)
+```
+
+```{r}
+bnname <- "LDAG10"
+filepaths <- list.files(here::here("./simulations/bn/MCMCchains"), 
+                        pattern = sprintf("%s_partition", bnname), full.names = T)
+filepaths <- filepaths[!grepl("N100_", filepaths)]
+tmp <- eval_files(filepaths, bnname) 
+```
+
+```{r}
+df <- res_to_df(tmp[, 1], filepaths)
+plot_box_plot(df, "TPR")
+plot_box_plot(df, "FPR")
+plot_box_plot(df, "avgppv")
+```
+
+```{r}
+df <- res_to_df(tmp[, 2], filepaths)
+plot_prec_recall(df)
+```
+
+```{r }
+df <- res_to_df(tmp[, 3], filepaths)
+plot_box_plot(df, "tmp")
 ```
 
 
 
 ```{r, cache = T}
-eval <- function(network, epf) {
-
-
-  indx  <- which(par$network == network & par$epf == epf)
-  if (length(indx) == 0) return(NULL)
-  burninsamples <- seq_len(200)
-  probs <- lapply(filepaths[indx], 
-                  function(f) compute_posterior_probs(readRDS(f)$smpl, seq_len(200)))
-  
-  bn <- readRDS(here::here("./data/", paste0(network, ".rds")))
-  dag  <- bnlearn::amat(bn)
-  dmat <- bida:::descendants(bn)
-  n <- length(bn)
-  dindx <- diag(n) == 1
-  
- 
-  
-  # Edge probabilities 
-  edgeps <- lapply(probs, "[[", "edgep")
-  n1  <- sum(dag)
-  tmp <- lapply(edgeps, 
-                function(x) c(TPR = sum(x[dag==1])/n1, FPR = sum(x[dag == 0])/(n**2-n1)))
-  df <- data.frame(par[indx, ], do.call(rbind, tmp))
-  df_long <- tidyr:::pivot_longer(df, cols = c("TPR", "FPR"))
-  
-  ggplot(df_long, aes(N, y = value, fill = struct)) +
-    facet_grid(algo+epf~network+name) +
-    geom_boxplot() +
-    ggtitle("Average true and false positive edge rate") -> plot
-  print(plot)
-  
-  # ARP 
-  ancps <- lapply(probs, "[[", "ancp")
-  tmp   <- lapply(ancps, 
-                  function(x) compute_prec_recall(x[!dindx], dmat[!dindx]))
-  
-  df <- data.frame(par[rep(indx, each = n*(n-1)), ], 
-                   do.call(rbind, tmp))
-  
-  ggplot(df, aes(TPR, PPV, group = r)) +
-  facet_grid(algo+struct+epf~network+N) +
-  geom_hline(yintercept = mean(dmat[!dindx]), color = "red") +
-  geom_line() +
-  ggtitle("Ancestor relation probabilities") -> plot
-  print(plot)
-  
-
-  
-  # Average precision
-  df <- par[indx, ]
-  df$ancp <- vapply(ancps, function(x) avgppv(x[!dindx], dmat[!dindx]), numeric(1))
-  df$edgep <- vapply(edgeps, function(x) avgppv(x[!dindx], dag[!dindx]), numeric(1))
-  df_long <- tidyr:::pivot_longer(df, cols = c("edgep", "ancp"))
-  
-  ggplot(df_long, aes(N, y = value, fill = struct)) +
-    facet_grid(algo+epf~network) +
-    geom_boxplot() +
-    ggtitle("Average precision") -> plot
-  print(plot)
-  
-  # run times 
-  tocs <- lapply(filepaths[indx], 
-                 function(f) attr(readRDS(f)$smpl, "toc"))
-  names <- unique(lapply(tocs, names))
-  tmp <- do.call(rbind, tocs)
-  colnames(tmp) <- names[[1]]
-  df <- data.frame(par[indx, ], tmp)
-  
-  df_long <- tidyr:::pivot_longer(df, names[[1]])
-  ggplot(df_long, aes(N, y = value, fill = name)) +
-      facet_grid(algo+struct+epf~network, scales = "free") +
-      geom_boxplot() +
-      ggtitle("Runtimes") -> plot
-  print(plot)
-}
 
 
 
@@ -185,7 +200,9 @@ eval <- function(network, epf) {
 ## Labeled DAG with 10 nodes
 ### Edge penalization factor: 2 (default value in `BiDAG`)
 ```{r}
-eval("LDAG10", "epf2")
+res <- eval("LDAG10", "epf1")
+res <- eval("LDAG10", "epf2")
+res <- eval("LDAG10", "epf4")
 ```
 
 ### Edge penalization factor: 4

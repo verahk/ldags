@@ -1,0 +1,13 @@
+# Convergence diagnostics
+The plots shows traceplots and posterior edge probabilities from two subsequent MCMC runs on the same data set, sampled from the LDAG10 network. 
+
+![Network: child](edgeps_LDAG10_tree_order.png){ width=50% }
+![Network: child](edgeps_LDAG10_tree_partition.png){ width=50% }
+
+![Network: child](edgeps_LDAG10_ldag_order.png){ width=50% }
+![Network: child](edgeps_LDAG10_ldag_partition.png){ width=50% }
+
+![Network: child](edgeps_LDAG10_dag_order.png){ width=50% }
+![Network: child](edgeps_LDAG10_dag_partition.png){ width=50% }
+
+
