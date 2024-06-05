@@ -1,0 +1,54 @@
+
+Compare MCMC samples of DAGs and different start spaces.
+
+```{r}
+library(ggplot2)
+here::i_am("./simulations/startspace/results.Rmd")
+simname <- "startspace"
+source(here::here("simulations", simname, "R/eval.R"), echo = T)
+```
+```{r}
+plot_box_plot <- function(df, var, title = "", fill = "struct", facets = "algo+name~network+epf") {
+  ggplot(df, aes(N, y = !! sym(var), fill = !! sym(fill))) +
+    facet_grid(as.formula(facets), scales = "free") +
+    geom_boxplot() +
+    ggtitle(title)      
+}
+plot_prec_recall <- function(df, title = "", facets = "algo+struct+epf~network+N") {
+  ggplot(df, aes(TPR, PPV, group = r)) +
+    facet_grid(as.formula(facets)) +
+    geom_line() +
+    ggtitle(title)
+}
+```
+
+```{r}
+filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
+tmp <- eval_files(filepaths, bnname) 
+```
+
+```{r}
+
+```
+
+```{r}
+df <- res_to_df(tmp[, 3], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
+facets <- "epf+struct~init+smpl+N"
+plot_prec_recall(df, facets = facets)
+```
+
+```{r}
+df <- res_to_df(tmp[, 2], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
+facets <- "epf~init+smpl"
+plot_box_plot(df, "TPR", facets = facets)
+plot_box_plot(df, "FPR", facets = facets)
+plot_box_plot(df, "avgppv", facets = facets)
+```
+
+```{r}
+df <- res_to_df(tmp[, 4], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
+facets <- "name+epf~init+smpl"
+df %>% 
+  plot_box_plot("tmp", facets = facets, fill = "struct")
+```
+
