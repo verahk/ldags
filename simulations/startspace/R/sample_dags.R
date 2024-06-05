@@ -1,12 +1,12 @@
 
 
-sample_dags <- function(scorepar, algo_init = "pcskel", algo_Sample = "order", hardlimit = 5, verbose = F) {
+sample_dags <- function(scorepar, algo_init = "pcskel", algo_sample = "order", hardlimit = 5, verbose = F) {
   
   tic <- Sys.time()
   
   # init search space 
   if (verbose) cat("\nInit search space:")
-  startspace <- init_search_space(scorepar, init, hardlimit, verbose = verbose)
+  startspace <- init_search_space(scorepar, algo_init, hardlimit, verbose = verbose)
   tic <- c(tic, init = Sys.time())
   
   # expand search space
@@ -17,7 +17,7 @@ sample_dags <- function(scorepar, algo_init = "pcskel", algo_Sample = "order", h
   
   # run MCMC 
   if (verbose) cat("\nSample DAGs using BiDAG::sampleBN:\n")
-  smpl <- BiDAG::sampleBN(scorepar, algo = sample, scoretable = BiDAG::getSpace(iterfit), verbose = verbose)
+  smpl <- BiDAG::sampleBN(scorepar, algo = algo_sample, scoretable = BiDAG::getSpace(iterfit), verbose = verbose)
   tic  <- c(tic, sample = Sys.time())
   
   # add time-tracking as an attribute

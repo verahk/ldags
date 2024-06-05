@@ -10,13 +10,21 @@ nlev <- sapply(bn, function(x) dim(x$prob)[1])
 levels <- lapply(nlev-1, seq.int, from = 0)
 
 # REGULARITY ----
-j <- 1
-parentnodes <- 2:5
+j <- 6
+parentnodes <- 2:4
 local_struct <- "tree"
+
 regular  <- T 
 scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = local_struct, regular = regular)
-famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, regular = regular, local_struct = NULL)
 score <- BiDAG:::usrDAGcorescore(j, parentnodes, length(bn), scorepar)
+famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, struct = local_struct, regular = regular)
+abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
+cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
+
+regular  <- F
+scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = local_struct, regular = regular)
+score <- BiDAG:::usrDAGcorescore(j, parentnodes, length(bn), scorepar)
+famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, struct = local_struct, regular = regular)
 abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
 cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
 
@@ -29,23 +37,23 @@ edgepf <- 2
 
 local_struct <- "tree"
 scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = local_struct)
-famscore <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, local_struct = NULL)
 score <- BiDAG:::usrDAGcorescore(j, parentnodes, length(bn), scorepar)
+famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, struct = local_struct)
 abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
 cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
 
 local_struct <- "ldag"
 scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = local_struct)
-famscore <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, local_struct = NULL)
 score <- BiDAG:::usrDAGcorescore(j, parentnodes, length(bn), scorepar)
+famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, struct = local_struct)
 abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
 cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
 
 
 local_struct <- "dag"
 scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = local_struct)
-famscore <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, local_struct = NULL)
 score <- BiDAG:::DAGcorescore(j, parentnodes, length(bn), scorepar)
+famscore <- ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess = 1, struct = NULL)
 abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
 cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
 

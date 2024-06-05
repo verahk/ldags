@@ -14,21 +14,22 @@ source("./simulations/startspace/R/sample_dags.R")
 simpar <- expand.grid(list(bnname = c("LDAG10"), 
                            init = c("hc", "hcskel", "pcskel"),
                            sample = "partition", 
-                           edgepf = c(1, 2, 10),
+                           edgepf = c(1, 2, 10**4),
                            regular = c(TRUE, FALSE),
                            N = 1000,
-                           r = 1:30, 
+                           r = 1:10, 
                            struct = c("dag", "tree", "ldag")),
                       stringsAsFactors = F)
 
 run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_file = F, verbose = T) {
   
-  filename <- sprintf("%s_%s_%s_%s_N%s_epf%02.0f_reg%s_r%02.0f.rds", 
-                      bnname, init, struct, sample, edgepf, regular*1, N, r)
+  filename <- paste(bnname, init, struct, sample, 
+                    sprintf("epf%s_reg%s_N%s_r%02.0f.rds", edgepf, regular*1, N, r),
+                    sep = "_")
   filepath <- paste0("./simulations/startspace/MCMCchains/", filename)
   if (file.exists(filepath) && write_to_file) return(NULL)
   
-  if (verbose) cat("\n", filename)
+  if (verbose) cat(filename)
   bn <- readRDS(paste0("./data/", bnname, ".rds"))
   
   # draw data
@@ -67,9 +68,9 @@ if (FALSE) {
 #                               simpar$r[r],
 #                               write_to_file = T)
 
-
+file.remove("tmp.out")
 cl <- makeCluster(4, type = "SOCK", outfile = "tmp.out")
-clusterExport(cl, c("run", "simpar", "define_search_space", "define_scorepar"))
+clusterExport(cl, c("run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
 registerDoSNOW(cl)
 
 foreach(r = 1:nrow(simpar)) %dopar% run(simpar$bnname[r], 
