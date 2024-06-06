@@ -30,7 +30,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
   
   # compute seach part's contribution to the local score
   partition   <- unlist_partition(P)
-  part_size   <- tabulate(partition)
+  part_size   <- lengths(P)
   part_counts <- rowsum(counts, partition, reorder = T)
   part_scores <- famscore_bdeu_byrow(part_counts, ess, r, q, part_size)
   
@@ -41,9 +41,9 @@ optimize_partition_ldag <- function(counts, levels, ess,
   best_lab <- list()
   
   # check if all co-parent configs is already added to label
-  lens <- lengths(labels)
-  for (i in seq_along(nlev)[lens < (q/nlev-1)]) {
-    
+  #lens <- lengths(labels)
+  #for (i in seq_along(nlev)[lens < (q/nlev-1)]) {
+  for (i in seq_along(nlev)) { 
     # find candidate  labels /  co-parent configs to add to label
     # - enumerate these contexts by the rows in the CPT where node i is zero
     contexts <- conf_enum[conf[, i] == 0]
@@ -62,11 +62,12 @@ optimize_partition_ldag <- function(counts, levels, ess,
     if (any(redundant_labels)) {
       if (verbose) cat("\nAdd implicit labels: node", i, "contexts = ", paste(contexts[redundant_labels], collapse = ","))
       labels[[i]] <- append(labels[[i]], contexts[redundant_labels])
-      if (all(redundant_labels) || !(length(labels[[i]]) < q/nlev[i]-1) ) next 
-      
+      if (all(redundant_labels)) next 
       parts <- parts[!redundant_labels]
       contexts <- contexts[!redundant_labels]
     }
+    
+    if (! (length(labels[[i]]) < q/nlev[i]-1) ) next
     
     parts <- lapply(parts, sort)
     dups  <- duplicated(parts)
@@ -82,6 +83,10 @@ optimize_partition_ldag <- function(counts, levels, ess,
       
       if (diff > best_diff) {
         
+        # check if regular 
+        PP <- c(P[-collapse], list(unlist(P[collapse])))
+        if (!all(is_regular(PP,  nlev, stride)))  next 
+        
         if (any(dups)) {
           # find all labels implied by collapsing the two parts
           matches <- vapply(parts, function(x) all(x == collapse), logical(1))
@@ -93,23 +98,31 @@ optimize_partition_ldag <- function(counts, levels, ess,
         } else {
           context <- contexts[j]
         }
+        
+        best_partition <- PP
         best_diff <- diff
         best_lab  <- list(node = i, context = context, parts = collapse)
         keep_climb <- TRUE
       }
     }
   }
-    
+  
+
+  
   if (keep_climb) {
-    if (verbose) cat(sprintf("\nnode %s, context = %s, parts = %s",
-                             best_lab$node, 
-                             paste(best_lab$context, collapse = ","),
-                             paste(best_lab$parts, collapse = ",")))
-    
+  
     # update labels and partition
     labels[[best_lab$node]] <- c(labels[[best_lab$node]], best_lab$context)
-    P <- c(P[-best_lab$parts], list(unlist(P[best_lab$parts])))
+    P <- best_partition 
+    
+    if (verbose) cat(sprintf("\ndiff = %s, node %s, context = %s, parts = %s, new partition: %s",
+                             best_diff,
+                             best_lab$node, 
+                             paste(best_lab$context, collapse = ","),
+                             paste(best_lab$parts, collapse = ","),
+                             paste(unlist_partition(P), collapse = " ")))
    
+    
     return(optimize_partition_ldag(counts, levels, ess, P, labels, conf, verbose))
     
   } else {

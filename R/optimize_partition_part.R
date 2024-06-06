@@ -29,34 +29,39 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
   # find the two current parts that increase the score most if collapsed
   keep_climb <- FALSE
   if (length(P) > 2) {
-    max_diff <- -(r-1)*lkappa
+    best_diff <- -(r-1)*lkappa
     nlev <- lengths(levels)
     stopifnot(all(nlev == 2))
     stride <- c(1, cumprod(nlev[-length(nlev)]))
+    joint <- seq_len(prod(nlev))-1 
     
     for (i in seq.int(1, length(P)-1)) {
       for (j in seq.int(i+1, length(P))) {
         
+        # check if collapsed part can be represented by labels
+        new_part <- c(P[[i]], P[[j]])
+        if (!is_ldag_consistent_part(new_part, nlev, stride, joint)) next 
+        
         # candidate partition
-        PP  <- replace(P, i, list(c(P[[i]], P[[j]])))
-        PP[j] <- NULL
+        # PP  <- replace(P, i, list(new_part))
+        # PP[j] <- NULL
+        PP  <- c(P[-c(i, j)], list(new_part))
         
         # compute score of collapsed parts
         tmp_count <- part_counts[i,, drop = FALSE] + part_counts[j, , drop = FALSE]
-        tmp_score <- famscore_bdeu_byrow(tmp_count, ess, r, q, length(PP[[i]]))
+        tmp_score <- famscore_bdeu_1row(tmp_count, ess, r, q, length(new_part))
         
         # compare score with score of non-collapsed regions
         diff <- tmp_score - (part_scores[i] + part_scores[j])
         
         # compare score with current best partition
-        if (diff > max_diff) {
+        if (diff > best_diff) {
           
-          # check if collapsing part i and j result in regular, CSI-consistent partition
-          if (!is_valid_partition(PP, levels, nlev, stride, verbose = F))  next
-          
-          if (verbose) cat("\n (i, j):", c(i, j), "diff:", diff, "partition:", unlist_partition(PP))
-          max_diff <- diff
+          # check if collapsing part i and j result in regular partition
+          if (!all(is_regular(PP,  nlev, stride)))  next
+          best_diff <- diff
           best_partition <- PP
+          best_parts <- c(i, j)
           keep_climb <- TRUE
         }
       }
@@ -64,7 +69,11 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
   }
   
   if (keep_climb) {
-    if (verbose) cat("\nbest partition:", unlist_partition(best_partition))
+    if (verbose) cat(sprintf("\ndiff = %s, parts = %s, new partition: %s",
+                             best_diff,
+                             paste(best_parts, collapse = ","),
+                             paste(unlist_partition(best_partition), collapse = " ")))
+    
     optimize_partition_part(counts, levels,  ess, best_partition,  lkappa, verbose)
   } else {
     return(list(partition = P, counts = part_counts, scores = part_scores))

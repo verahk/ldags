@@ -21,67 +21,75 @@
 #' @examples
 #' nlev <- c(2, 2)
 #' stride <- c(1, 2)
-#' levels <- lapply(nlev-1, seq.int, from = 0)
 #' 
-#' # CSI-consistent partition
+#' # CSI-consistent, regular partition
 #' P <- list(c(0, 1, 3), 2)
-#' is_valid_partition(P, levels, nlev, stride, verbose = T) == TRUE
+#' is_ldag_consistent(P,  nlev, stride)
+#' is_regular(P, nlev, stride)
 #' 
 #' # not CSI-consistent partition
 #' P <- list(c(0, 3), 2, 1)
-#' is_valid_partition(P, levels, nlev, stride, verbose = T) == FALSE
+#' is_ldag_consistent(P,  nlev, stride)
+#' is_regular(P, nlev, stride)
 #' 
 #' # CSI-consistent, but not regular
 #' P <- list(c(0, 1), c(2, 3))
-#' is_valid_partition(P, levels, nlev, stride, verbose = T) == FALSE
+#' is_ldag_consistent(P,  nlev, stride)
+#' is_regular(P, nlev, stride)
+#' 
 #' P <- list(c(0, 2), c(1, 3))
-#' is_valid_partition(P, levels, nlev, stride, verbose = T) == FALSE
+#' is_ldag_consistent(P,  nlev, stride)
+#' is_regular(P, nlev, stride)
 #' 
 #' # Different cardinality
 
-is_valid_partition <- function(P, levels, nlev, stride = c(1, cumprod(nlev[-length(nlev)])), check_regularity = TRUE, verbose = FALSE) {
-  n    <- length(levels)
-  seqn <- seq_len(n)
- 
-  # for tracking which partitions that includes all levels of each variable
-  includes_all_lev <- matrix(FALSE, nrow = length(P), ncol = n)
+
+is_ldag_consistent <- function(P, nlev, stride = c(1, cumprod(nlev[-length(nlev)]))) {
+  nparts <- length(P)
+  joint <- seq_len(prod(nlev))-1
   
-  for (j in seq_along(P)[lengths(P) > 1]) {
-    
-    p <- P[[j]]
-    K <- list()
-    
-    for (i in seqn) {
-      
-      # possible labels on the edge i -> child
-      labels <- bida:::expand_grid_fast(levels[-i], nlev[-i])
-      
-      # corresponding rows in the CPT
-      rows <- outer(c(labels%*%stride[-i]), levels[[i]]*stride[i], "+")
-      
-      # indicator for labels consistent with part p
-      indx <- apply(rows, 1, function(x) !any(match(x, p, 0L) == 0))
-      if (any(indx)) {
-        K[[i]] <- c(rows[indx, ])
-        includes_all_lev[j, i] <- T
-      }
-    }
-    
-    # stop if current part can not be produced by labels
-    K <- unique(unlist(K))
-    if (! (length(K) == length(p) && all(sort(K) == sort(p))) ) {
-      if (verbose) cat("P is not CSI-consistent\n")
-      return(FALSE)
-    }
+  is_consistent <- TRUE
+  j <- 0
+  while(is_consistent && j < nparts) {
+    j <- j+1
+    is_consistent <- is_ldag_consistent_part(P[[j]], nlev, stride, joint)
   }
-  
-  # check regularity 
-  if (check_regularity && all(lengths(P) >= min(nlev)) &&  any(colMeans(includes_all_lev) == 1)) {
-    if (verbose) cat("P is not regular\n")
-    return(FALSE)
-  } else {
-    return(TRUE)
-  }
+  return(is_consistent)
 }
 
+is_ldag_consistent_part <- function(p, nlev, stride, joint = seq_len(prod(nlev))-1) {
+  if (length(p) == 1) return(TRUE)
+  p <- p+1                        # refer to rows, starting at 1
+  K <- logical(length(joint))
+  for (i in seq_along(nlev)) {
+    
+    # possible labels on the edge i -> child
+    labels <- joint[(joint%/%stride[i])%%nlev[i] == 0]
+    
+    # rows by each label (by row)
+    rows  <- outer(labels, stride[i]*(seq_len(nlev[i])-1)+1, "+")
+    
+    # check which labels could produce p
+    indx <- rowSums(array(match(rows, p, 0L), dim(rows)) > 0) == nlev[i]
+    K[c(rows[indx, ])] <- TRUE
+  }
+  
+  #print(list(p-1, K))
+  all(K[p])
+}
+
+
+is_regular <- function(P, nlev, stride = c(1, cumprod(nlev[-length(nlev)]))) {
+  is_regular <- !logical(length(nlev))
+  if (min(lengths(P)) >= min(nlev)) {
+    partition <- unlist_partition(P)
+    joint     <- seq_len(prod(nlev))-1
+    for (i in seq_along(nlev)) {
+      contexts <- joint-stride[i]*(joint%/%stride[i])%%nlev[i]
+      parts    <- split(partition, contexts)
+      is_regular[i] <- any(! vapply(parts, function(x) all(x == x[1]), logical(1)))
+    }
+  }
+  return(is_regular)
+}
 
