@@ -76,7 +76,7 @@ is_valid_partition <- function(P, levels, nlev, stride = c(1, cumprod(nlev[-leng
   }
   
   # check regularity 
-  if (check_regularity && all(lengths(P) <= min(nlev)) &&  any(colMeans(includes_all_lev) == 1)) {
+  if (check_regularity && all(lengths(P) >= min(nlev)) &&  any(colMeans(includes_all_lev) == 1)) {
     if (verbose) cat("P is not regular\n")
     return(FALSE)
   } else {
