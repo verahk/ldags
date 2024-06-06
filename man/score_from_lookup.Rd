@@ -12,6 +12,7 @@ score_from_lookup(
   parentnodes,
   ess,
   method,
+  regular,
   lookup
 )
 }

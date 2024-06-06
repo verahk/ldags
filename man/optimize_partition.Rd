@@ -31,7 +31,7 @@ optimize_partition_ldag(
   ess,
   P = as.list(1:nrow(counts) - 1),
   labels = rep(list(integer()), length(levels)),
-  conf = bida:::expand_grid_fast(levels, nlev),
+  conf = as.matrix(expand.grid(levels)),
   verbose = FALSE
 )
 
