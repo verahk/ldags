@@ -53,27 +53,34 @@ optimize_partition_ldag <- function(counts, levels, ess,
     
     # find the parts satisfied by each candidate label
     rows  <- outer(contexts, levels[[i]]*stride[i]+1, "+")
-    parts <- split(partition[rows], .row(dim(rows)))
-    #apply(rows, 1, function(x) cbind(conf[x, ], p = partition[x]), simplify = F)
+    parts <- array(partition[rows], dim(rows))
+    # check 
+    # apply(rows, 1, function(x) cbind(conf[x, ], p = partition[x]), simplify = F)
     
-    # add labels that are satisfied by current labeling
-    redundant_labels <- vapply(parts, function(x) length(unique(x)), integer(1)) == 1
+    # find labels that implies no new independencies
+    redundant_labels <- rowSums(parts == parts[, 1]) == ncol(parts)
     
+    # add redundant labels to current set of labels
     if (any(redundant_labels)) {
       if (verbose) cat("\nAdd implicit labels: node", i, "contexts = ", paste(contexts[redundant_labels], collapse = ","))
       labels[[i]] <- append(labels[[i]], contexts[redundant_labels])
       if (all(redundant_labels)) next 
-      parts <- parts[!redundant_labels]
+      parts <- parts[!redundant_labels, , drop = F]
       contexts <- contexts[!redundant_labels]
     }
     
+    # if no additional label can be added to edge from i, go to next node
     if (! (length(labels[[i]]) < q/nlev[i]-1) ) next
     
-    parts <- lapply(parts, sort)
-    dups  <- duplicated(parts)
-    for (j in seq_along(parts)[!dups]) {
+   
+    # find labels that implies the same independencies
+    dups <- find_duplicated_rows(parts)
+    #parts <- lapply(parts, sort)
+    #dups  <- duplicated(parts)
+    
+    for (j in seq_along(contexts)[!dups]) {
       
-      collapse <- parts[[j]]
+      collapse <- parts[j, ]
       
       # compare score of collapsed vs separated parts
       tmp_counts <- colSums(part_counts[collapse,])
@@ -89,10 +96,18 @@ optimize_partition_ldag <- function(counts, levels, ess,
         
         if (any(dups)) {
           # find all labels implied by collapsing the two parts
-          matches <- vapply(parts, function(x) all(x == collapse), logical(1))
+          # candidates <- which(dups)[rowSums(parts[dups,, drop = F]) == sum(collapse)]
+          # matches <- vector("logical", length(candidates))
+          # for (jj in candidates) {
+          #   matches[j] <- all(match(parts[jj, ], collapse, 0L) > 0)
+          # } 
+          
+          matches <- apply(parts, 1, 
+                           function(x) all(match(x, collapse, 0L) > 0))
           if (!(length(labels[[i]]) + sum(matches) < q/nlev[i])) {
             next 
           } else {
+            #context <- contexts[c(j, candidates[matches])]
             context <- contexts[matches]
           }
         } else {
@@ -131,5 +146,67 @@ optimize_partition_ldag <- function(counts, levels, ess,
                 counts = part_counts, 
                 scores = part_scores))
   }
+}
+
+
+find_duplicated_rows <- function(x){
+  n <- nrow(x)
+  dups <- vector("logical", n)
+  sums <- rowSums(x)
+  if (anyDuplicated(sums) == 0) return(dups)
+  seqn <- seq_len(n)
+  for (i in seqn[-n]) {
+    if (!dups[i]) {
+      tab <- x[i, ]
+      candidates <- seqn[replace((!dups & (sums == sums[i])), i, FALSE)]
+      for (j in candidates) {
+        dups[j] <- all(match(x[j, ], tab, 0L) > 0)
+      }
+    }
+  }
+  return(dups)
+}
+
+
+if (FALSE) {
+  all_elem_equal <- function(y) vapply(y, function(x) all(x == x[1]), logical(1))
+  all_elem_equal2 <- function(y) vapply(y, function(x) length(unique(x)), integer(1)) == 1
+  all_elem_equal3 <- function(m) rowSums(m == m[, 1]) == 1
+  
+  tmp <- replicate(5, sample(1:3, 10, T), simplify = F)
+  m <- do.call(rbind, tmp) 
+
+  microbenchmark::microbenchmark(all_elem_equal(tmp),
+                                 all_elem_equal2(tmp),
+                                 all_elem_equal3(m))
+
+  find_duplicated_rows <- function(x){
+    n <- nrow(x)
+    dups <- vector("logical", n)
+    seqn <- seq_len(n)
+    sums <- rowSums(x)
+    
+    for (i in seqn[-n]) {
+      if (!dups[i]) {
+        tab <- x[i, ]
+        candidates <- seqn[replace((!dups & (sums == sums[i])), i, FALSE)]
+        for (j in candidates) {
+          dups[j] <- all(match(x[j, ], tab, 0L) > 0)
+        }
+      }
+    }
+    return(dups)
+  }
+  
+  find_duplicated_rows2 <- function(x) {
+    tmp <- lapply(asplit(x, 1), sort)
+    duplicated(tmp)
+  }
+  
+  
+  tmp <- replicate(5, sample(1:10, 3, T), simplify = F)
+  m <- do.call(rbind, tmp) 
+  microbenchmark::microbenchmark(find_duplicated_rows(m),
+                                 find_duplicated_rows2(m))
 }
 
