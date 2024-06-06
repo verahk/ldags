@@ -12,7 +12,7 @@ source("./simulations/startspace/R/init_search_space.R")
 source("./simulations/startspace/R/sample_dags.R")
 
 simpar <- expand.grid(list(bnname = c("LDAG10"), 
-                           init = c("hc", "hcskel", "pcskel"),
+                           init = c("pcskel"),
                            struct = c("dag", "tree", "ldag"),
                            sample = "partition", 
                            edgepf = c(1, 2, 10**4),

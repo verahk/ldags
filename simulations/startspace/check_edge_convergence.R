@@ -1,34 +1,25 @@
-
-
-
-# Check convergence of MCMC-chain of DAGs
-# - For each local-struct and MCMC-scheme, run 2 MCMC-runs and compare the edge-weights
-
-```{r}
-
 library(ldags)
 library(doSNOW)
 library(BiDAG)
 library(ldags)
 
+
 source("./simulations/startspace/R/define_scorepar.R")
 source("./simulations/startspace/R/init_search_space.R")
 source("./simulations/startspace/R/sample_dags.R")
 
-here::here("simulations", "startspace", "check_edge_convergence.Rmd")
+
 bnname <- "LDAG10"
-bn <- readRDS(here::here("data", paste0(bnname, ".rds")))
+bn <- readRDS(paste0("data/", bnname, ".rds"))
 
 set.seed(007)
 N <- 1000
 data <- bida:::sample_data_from_bn(bn, N)
 nlev <- sapply(bn, function(x) dim(x$prob)[1])
-```
-
-```{r}
 
 
 run <- function(data, init, struct, sample, regular) {
+  cat("\nStarted run with:", init, struct, sample, regular)
   ess <- 1
   hardlimit <- 5
   edgepf <- 2
@@ -54,12 +45,12 @@ run <- function(data, init, struct, sample, regular) {
   plot.new()
   text(.5, .6, title, cex = 1.5, font = 2)
   text(.5, .1, sub, cex = 1.25, font = 2)
-
+  
   matplot(trace, type = "l", xlab = "iteration")
- 
+  
   plot(edgeps_dag[[1]], edgeps_dag[[2]])
   abline(a = 0, b = 1, col = "red")
-
+  
   plot(edgeps_pdag[[1]], edgeps_pdag[[2]])
   abline(a = 0, b = 1, col = "red")
   
@@ -67,39 +58,31 @@ run <- function(data, init, struct, sample, regular) {
   return(NULL)
 }
 
+
+# test ----
 run(data, "hc", "dag", "order", T)
 
-```
-
-```{r, cache = T}
-
-
+# run ----
 simpar <- expand.grid(list(init = c("pcskel"),
-                      struct = c("dag", "tree", "ldag"),
-                      sample = c("partition", "order"),
-                      regular = c(TRUE, FALSE)), 
+                           struct = c("dag", "tree", "ldag"),
+                           sample = c("partition", "order"),
+                           regular = c(TRUE, FALSE)), 
                       stringsAsFactors = F)
 
 file.remove("tmp.out")
 cl <- makeCluster(4, type = "SOCK", outfile = "tmp.out")
-clusterExport(cl, c("run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
+clusterExport(cl, c("data", "run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
 registerDoSNOW(cl)
-# foreach(r = 1:nrow(simpar)) %dopar% run(data,
-#                                         simpar$init[r], 
-#                                         simpar$struct[r],
-#                                         simpar$sample[r],
-#                                         simpar$regular[r])
-```
 
-```{r, results = 'asis'}
+foreach(r = 1:nrow(simpar)) %dopar% run(data,
+                                        simpar$init[r],
+                                        simpar$struct[r],
+                                        simpar$sample[r],
+                                        simpar$regular[r])
 
-plots <- list.files("./convergence_plots/", full.names = T)
-
-for(i in plots){
-  filename <- file.path("plot", i)
-  cat("![text](",filename,")")
-}
-```
-
-
-
+# collect graphs in one markdown file ----
+filepath <- "./simulations/startspace/convergence_plots/"
+filename <- paste0(filepath, "plots.md")
+cat("# Convergence diagnostics for simulations: startspace\n", file = filename, append = F)
+files <- list.files(filepaths, full.names = T)
+for (f in files) cat(sprintf("![%s](%s)\n", f, f), file = filename, append = T)

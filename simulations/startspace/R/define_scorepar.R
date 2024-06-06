@@ -1,6 +1,6 @@
 define_scorepar <- function(data, nlev, ess = 1, edgepf = 2, local_struct = NULL, regular = FALSE, lookup = NULL) {
   
-  if (! is.null(local_struct) && local_struct %in% c("tree", "ldag")) {
+  if (! is.null(local_struct) && local_struct %in% c("tree", "ldag", "part")) {
     
     scorepar <- BiDAG::scoreparameters("usr", 
                                        data = data, 
