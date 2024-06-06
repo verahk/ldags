@@ -6,7 +6,7 @@ compute_local_bdeu_score <- function(counts, ess, r, q, s) {
 
 compute_local_bdeu_score_from_cpt <- function(cpt, ess = 1) {
   if (is.null(cpt$partition)) {
-    compute_local_bdeu_score(ess = ess, r = ncol(cpt$counts), q = nrow(cpt$counts), s = 1)
+    compute_local_bdeu_score(cpt$counts, ess = ess, r = ncol(cpt$counts), q = nrow(cpt$counts), s = 1)
   } else {
     nlev <- lengths(cpt$levels)
     n <- length(nlev)
