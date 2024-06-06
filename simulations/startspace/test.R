@@ -1,4 +1,5 @@
 
+bnname <- "LDAG10"
 bn <- readRDS(paste0("./data/", bnname, ".rds"))
 dag <- bnlearn::amat(bn)
 N <- 1000
@@ -58,6 +59,41 @@ abs(score - (famscore - length(parentnodes)*log(edgepf))) < 10**-10
 cat("score:", score, "famscore:", famscore, "famscore+pen:",  (famscore - length(parentnodes)*log(edgepf)))
 
 
+# SCORE TRUE DAG ---- 
+seqn <- seq_len(ncol(dag))
+parentnodes <- apply(dag, 2, function(x) seqn[x == 1])
+famscore <- function(j, pa, struct, data) {
+  ldags:::compute_local_bdeu_score_from_data(data, levels, nlev, j, pa, ess = 1, struct = switch(struct, "dag" = NULL, struct))
+}
+famscores <- function(struct, data) {
+  mapply(famscore,  j = seqn, pa = parentnodes, MoreArgs = list(struct = struct, data = data))
+}
+
+# no edge penalization
+tmp <- sapply(c("tree", "ldag", "dag"), famscores, data = data)
+colSums(tmp)
+
+# with edge penalization
+tmp <- tmp + sapply(parentnodes, length)*log(2)
+colSums(tmp)
+
+test <- function() {
+  data <- bida:::sample_data_from_bn(bn, N)
+  tmp  <- sapply(c("tree", "ldag", "dag"), famscores, data = data) 
+  cbind(epf1 = colSums(tmp),
+        epf2 = colSums(tmp + sapply(parentnodes, length)*log(2)), 
+        epf1000 = colSums(tmp - sapply(parentnodes, length)*log(1000)))
+}
+
+tmp <- replicate(10, test())
+df <- setNames(reshape2::melt(tmp), c("struct", "epf", "iter", "value"))
+df %>%   
+  tidyr::pivot_wider(names_from = "struct", values_from = "value") %>% 
+  tidyr::pivot_longer(c("tree", "ldag"), names_to = "struct") %>% 
+ggplot(aes(dag, value, color = struct, group = interaction(epf, iter))) +
+  facet_grid(.~epf) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() 
 
 # SCORE OF MAP DAG -----
 bnname <- "LDAG10"
@@ -81,11 +117,8 @@ for (j in seq_along(bn)) {
 }
 sum(scores) -test$score
 
-# INIT SEARCH SPACE ----
-set.seed(N+r)
-data <- bida:::sample_data_from_bn(bn, N)
-nlev <- sapply(bn, function(x) dim(x$prob)[1])
-levels <- lapply(nlev-1, seq.int, from = 0)
+
+
 
 
 

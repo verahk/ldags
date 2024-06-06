@@ -13,13 +13,15 @@ source("./simulations/startspace/R/sample_dags.R")
 
 simpar <- expand.grid(list(bnname = c("LDAG10"), 
                            init = c("hc", "hcskel", "pcskel"),
+                           struct = c("dag", "tree", "ldag"),
                            sample = "partition", 
                            edgepf = c(1, 2, 10**4),
                            regular = c(TRUE, FALSE),
                            N = 1000,
-                           r = 1:10, 
-                           struct = c("dag", "tree", "ldag")),
+                           r = 1:30),
                       stringsAsFactors = F)
+indx <- simpar$regular == T & (simpar$edgepf > 1 | simpar$struct == "dag")
+simpar <- simpar[!indx, ]
 
 run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_file = F, verbose = T) {
   
@@ -30,10 +32,11 @@ run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_fi
   if (file.exists(filepath) && write_to_file) return(NULL)
   
   if (verbose) cat(filename)
-  bn <- readRDS(paste0("./data/", bnname, ".rds"))
+  #bn <- readRDS(paste0("./data/", bnname, ".rds"))
   
   # draw data
   set.seed(N+r)
+  bn <- ldags:::example_bn(bnname)
   data <- bida:::sample_data_from_bn(bn, N)
   nlev <- sapply(bn, function(x) dim(x$prob)[1])
   

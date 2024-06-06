@@ -15,40 +15,71 @@ plot_box_plot <- function(df, var, title = "", fill = "struct", facets = "algo+n
     ggtitle(title)      
 }
 plot_prec_recall <- function(df, title = "", facets = "algo+struct+epf~network+N") {
+  rate <- df$PPV[nrow(df)]
   ggplot(df, aes(TPR, PPV, group = r)) +
     facet_grid(as.formula(facets)) +
-    geom_line() +
+    #geom_line() +
+    geom_hline(yintercept = rate, color = "red") +
+    geom_step(direction = "vh") +
+    geom_point(data = dplyr::filter(df, !is.infinite(df$x)),
+               color = "blue", size = .25) +
     ggtitle(title)
 }
 ```
 
 ```{r}
+
+res <- eval_files(filepaths, bnname) 
+```
+
+```{r}
+res <- files <- list() 
 filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
-tmp <- eval_files(filepaths, bnname) 
+names <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
+#clusterExport(cl, c("run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
+registerDoSNOW(cl)
+for (r in 1:30) {
+  for (N in c(1000)) {
+    indx <- grepl(sprintf("r%02.0f.rds", r), filepaths)
+    res[[r]] <- eval_files(filepaths[indx], bnname, r = r, N = N)
+    files[[r]] <- filepaths[indx]
+  }
+}
+  
+res <- do.call(rbind, res)
+filepaths <- unlist(files)
+```
+
+
+```{r}
+df <- res_to_df(res[, 3], filepaths, names)
+
+for (x in unique(df$init)) {
+  facets <- "struct~init+regular+epf+sample+N"
+  indx <- df$init == x 
+  plot <- plot_prec_recall(df[indx, ], facets = facets)
+  print(plot)
+}
+
 ```
 
 ```{r}
-
-```
-
-```{r}
-df <- res_to_df(tmp[, 3], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
-facets <- "epf+struct~init+smpl+N"
-plot_prec_recall(df, facets = facets)
-```
-
-```{r}
-df <- res_to_df(tmp[, 2], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
-facets <- "epf~init+smpl"
+df <- res_to_df(res[, 2], filepaths, names)
+facets <- "init+sample~regular+epf"
 plot_box_plot(df, "TPR", facets = facets)
 plot_box_plot(df, "FPR", facets = facets)
 plot_box_plot(df, "avgppv", facets = facets)
 ```
 
 ```{r}
-df <- res_to_df(tmp[, 4], filepaths, names = c("network", "init", "struct", "smpl", "N", "epf", "r"))
-facets <- "name+epf~init+smpl"
-df %>% 
-  plot_box_plot("tmp", facets = facets, fill = "struct")
+df <- res_to_df(res[, 4], filepaths, names)
+facets <- "name~init+regular+epf+sample"
+
+
+for (x in unique(df$init)) {
+  indx <- df$init == x 
+  plot <- plot_box_plot(df[indx, ],  "tmp", fill = "struct", facets = facets)
+  print(plot)
+}
 ```
 
