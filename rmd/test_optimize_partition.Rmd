@@ -161,7 +161,8 @@ nlev <- lengths(levels)
 ess <- 1
 
 for (i in 1:100) {
-  counts <- matrix(rgamma(2**(3+1), shape = 100), ncol = 2)
+  #cat("\niter:", i, "\n")
+  counts <- matrix(rgamma(2**(3+1), shape = 1), ncol = 2)
   fits <- list()
 
   fits$part <- optimize_partition(counts, levels, ess, "part", make_regular = F, F)
@@ -172,10 +173,10 @@ for (i in 1:100) {
   
   if (!all(partitions[, "part"] == partitions[, "ldag"])) {
       cbind(expand.grid(levels), partitions)
-  
+  cat("\npart:")
   fits$part <- optimize_partition(counts, levels, ess, "part", make_regular = F, T)
+  cat("\nldag:")
   fits$ldag <- optimize_partition(counts, levels, ess, "ldag", make_regular = F, T)
-  fits$tree <- optimize_partition(counts, levels, ess, "tree", make_regular = F, T)
   
       is_ldag_consistent(fits$part$partition, nlev)
       is_regular(fits$part$partition, nlev)
@@ -288,12 +289,12 @@ for (optPartMethod in c("tree", "ldag", "part")){
   scorepar$optPartMethod <- optPartMethod
   assign(optPartMethod, list(), scorepar$lookup)
   cat("No parents:\n")
-  print(usrDAGcorescore(5, integer(0), ncol(dag), scorepar))
+  print(usrDAGcorescore(4, integer(0), ncol(dag), scorepar))
   cat("One parent:\n")
-  print(usrDAGcorescore(5, 4, ncol(dag), scorepar))
+  print(usrDAGcorescore(4, 2, ncol(dag), scorepar))
   
   cat("Both parents:\n")
-  print(usrDAGcorescore(5, c(1, 4), ncol(dag), scorepar))
+  print(usrDAGcorescore(5, 2:3, ncol(dag), scorepar))
 }
 
 ```
@@ -309,11 +310,12 @@ res <- list()
 for (optPartMethod in c("ldag", "tree")) {
   cat("\n", optPartMethod, "\n")
   scorepar$optPartMethod <- optPartMethod
-  scorepar$lookup[[optPartMethod]] <- rep(list(list()), ncol(dag))
-  res[[optPartMethod]] <- sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3)
-  #tryCatch(sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3), 
-  #         warning = function(cond) stop())
+  scorepar$lookup[[optPartMethod]] <- list()
+  res[[optPartMethod]] <- try(sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3))
+  ls.str(scorepar$lookup)
 }
+
+```
 
 
 
