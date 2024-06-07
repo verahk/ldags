@@ -4,31 +4,32 @@
 
 library(ldags)
 library(doSNOW)
+library(foreach)
 library(BiDAG)
 library(ldags)
 
-source("./simulations/startspace/R/define_scorepar.R")
-source("./simulations/startspace/R/init_search_space.R")
-source("./simulations/startspace/R/sample_dags.R")
+source("./simulations/LDAG10_2/R/define_scorepar.R")
+source("./simulations/LDAG10_2/R/init_search_space.R")
+source("./simulations/LDAG10_2/R/sample_dags.R")
 
 simpar <- expand.grid(list(bnname = c("LDAG10"), 
                            init = c("pcskel", "hc"),
-                           struct = c("dag", "ldag"),
+                           struct = c("ldag", "dag", "tree"),
                            sample = "partition", 
                            edgepf = c(1, 2, 10**3),
-                           regular = c(TRUE, FALSE),
-                           N = 1000,
+                           regular = c(FALSE),
+                           N = c(300, 1000, 3000, 10000),
                            r = 1:30),
                       stringsAsFactors = F)
-indx <- simpar$regular == T & (simpar$edgepf > 1 | simpar$struct == "dag")
+indx <- simpar$regular == T & (simpar$edgepf > 1 | !simpar$struct == "tree")
 simpar <- simpar[!indx, ]
 
-run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_file = F, verbose = T) {
+run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_file = F, verbose = F) {
   
   filename <- paste(bnname, init, struct, sample, 
                     sprintf("epf%s_reg%s_N%s_r%02.0f.rds", edgepf, regular*1, N, r),
                     sep = "_")
-  filepath <- paste0("./simulations/startspace/MCMCchains/", filename)
+  filepath <- paste0("./simulations/LDAG10_2/MCMCchains/", filename)
   if (file.exists(filepath) && write_to_file) return(NULL)
   
   if (verbose) cat(filename)
@@ -62,17 +63,18 @@ if (FALSE) {
 }
 
 # run ---- 
-# for (r in 1:nrow(simpar)) run(simpar$bnname[r], 
-#                               simpar$init[r], 
-#                               simpar$struct[r],
-#                               simpar$sample[r],
-#                               simpar$edgepf[r],
-#                               simpar$N[r],
-#                               simpar$r[r],
-#                               write_to_file = T)
+for (r in 1:nrow(simpar)) run(simpar$bnname[r], 
+                              simpar$init[r], 
+                              simpar$struct[r],
+                              simpar$sample[r],
+                              simpar$edgepf[r],
+                              simpar$regular[r],
+                              simpar$N[r],
+                              simpar$r[r],
+                              write_to_file = T)
 
 file.remove("tmp2.out")
-cl <- makeCluster(4, type = "SOCK", outfile = "")
+cl <- makeCluster(6, type = "SOCK", outfile = "")
 clusterExport(cl, c("run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
 registerDoSNOW(cl)
 

@@ -3,13 +3,13 @@ Compare MCMC samples of DAGs and different start spaces.
 
 ```{r}
 library(ggplot2)
-here::i_am("./simulations/startspace/results.Rmd")
-simname <- "startspace"
+here::i_am("./simulations/LDAG10_2/results.Rmd")
+simname <- "LDAG10_2"
 source(here::here("simulations", simname, "R/eval.R"), echo = T)
 ```
 ```{r}
-plot_box_plot <- function(df, var, title = "", fill = "struct", facets = "algo+name~network+epf") {
-  ggplot(df, aes(N, y = !! sym(var), fill = !! sym(fill))) +
+plot_box_plot <- function(df, x, y, title = "", fill = "struct", facets = "algo+name~network+epf") {
+  ggplot(df, aes(x = !! sym(x), y = !! sym(y), fill = !! sym(fill))) +
     facet_grid(as.formula(facets), scales = "free") +
     geom_boxplot() +
     ggtitle(title)      
@@ -18,25 +18,29 @@ plot_prec_recall <- function(df, title = "", facets = "algo+struct+epf~network+N
   rate <- df$PPV[nrow(df)]
   ggplot(df, aes(TPR, PPV, group = r)) +
     facet_grid(as.formula(facets)) +
-    #geom_line() +
+    geom_line() +
+    geom_hline(yintercept = rate, color = "red") +
+    ggtitle(title)
+}
+plot_prec_recall_step <- function(df, title = "", facets = "algo+struct+epf~network+N") {
+  rate <- df$PPV[nrow(df)]
+  ggplot(df, aes(TPR, PPV, group = r)) +
+    facet_grid(as.formula(facets)) +
     geom_hline(yintercept = rate, color = "red") +
     geom_step(direction = "vh") +
     geom_point(data = dplyr::filter(df, !is.infinite(df$x)),
-               color = "blue", size = .25) +
+               color = "blue", size = .5) +
     ggtitle(title)
 }
 ```
 
 
-
 ```{r}
-
-
 res <- files <- list() 
 filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
 names <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
 #clusterExport(cl, c("run", "simpar", "init_search_space", "define_scorepar", "sample_dags"))
-cl <- makeCluster(4, type = "SOCK", outfile = "")
+cl <- makeCluster(5, "SOCK", outfile = "")
 registerDoSNOW(cl)
 for (r in 1:30) {
   for (N in c(1000)) {
@@ -55,10 +59,12 @@ filepaths <- unlist(files)
 df <- res_to_df(res[, 3], filepaths, names)
 
 for (x in unique(df$init)) {
-  facets <- "struct~init+regular+epf+sample+N"
-  indx <- df$init == x 
-  plot <- plot_prec_recall(df[indx, ], facets = facets)
-  print(plot)
+  for (NN in unique(df$N)) {
+    facets <- "init+regular+epf+sample+N~struct"
+    indx <- df$init == x & df$N == NN
+    plot <- plot_prec_recall(df[indx, ], facets = facets)
+    print(plot)
+  }
 }
 
 ```
@@ -66,9 +72,16 @@ for (x in unique(df$init)) {
 ```{r}
 df <- res_to_df(res[, 2], filepaths, names)
 facets <- "init+sample~regular+epf"
-plot_box_plot(df, "TPR", facets = facets)
-plot_box_plot(df, "FPR", facets = facets)
-plot_box_plot(df, "avgppv", facets = facets)
+plot_box_plot(df, "N", "TPR", facets = facets)
+plot_box_plot(df, "N", "FPR", facets = facets)
+plot_box_plot(df, "N", "avgppv", facets = facets)
+```
+```{r}
+df <- res_to_df(res[, 2], filepaths, names)
+facets <- "init+sample~regular+N"
+plot_box_plot(df, x = "epf", y = "TPR", facets = facets)
+plot_box_plot(df, "epf", "FPR", facets = facets)
+plot_box_plot(df, "epf", "avgppv", facets = facets)
 ```
 
 ```{r}

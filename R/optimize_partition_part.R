@@ -40,13 +40,7 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
         
         # check if collapsed part can be represented by labels
         new_part <- c(P[[i]], P[[j]])
-        if (!is_ldag_consistent_part(new_part, nlev, stride, joint)) next 
-        
-        # candidate partition
-        # PP  <- replace(P, i, list(new_part))
-        # PP[j] <- NULL
-        PP  <- c(P[-c(i, j)], list(new_part))
-        
+   
         # compute score of collapsed parts
         tmp_count <- part_counts[i,, drop = FALSE] + part_counts[j, , drop = FALSE]
         tmp_score <- famscore_bdeu_1row(tmp_count, ess, r, q, length(new_part))
@@ -56,6 +50,11 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
         
         # compare score with current best partition
         if (diff > best_diff) {
+          
+          if (!is_ldag_consistent_part(new_part, nlev, stride, joint)) next 
+          
+          # candidate partition
+          PP  <- c(P[-c(i, j)], list(new_part))
           
           # check if collapsing part i and j result in regular partition
           if (!all(is_regular(PP,  nlev, stride)))  next

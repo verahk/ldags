@@ -28,7 +28,7 @@ eval_files <- function(filepaths, bnname, N, r) {
   dag  <- bnlearn::amat(bn)[!dindx]
   dmat <- bida:::descendants(bn)[!dindx]
   
-  export <- c("eval_MCMCchain", "compute_prec_recall", "compute_avgppv")
+  export <- c("eval_MCMCchain", "compute_prec_recall", "compute_avgppv", "compute_prec_recall_noise", "compute_avgppv_noise")
   res <- foreach(f = filepaths, 
                  .combine  = "rbind",
                  .packages = "Matrix",
@@ -59,12 +59,13 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
   
   # edge probs
   n1 <- sum(dag)
+
   res[1, 1] <- sum(edgep[dag == 1])/n1
   res[1, 2] <- sum(edgep[dag == 0])/(n**2-n-n1)
-  res[1, 3] <- compute_avgppv(edgep, dag)
+  res[1, 3] <- compute_avgppv(c(edgep), c(dag))
   
   # arp
-  pr <- compute_prec_recall(ancp, dmat)
+  pr <- compute_prec_recall_noise(ancp, dmat)
   
   n1 <- sum(dmat)
   probs <- Reduce("+", Map("*", dmats, support))[!dindx]
@@ -80,13 +81,14 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
   
 }
 
-compute_prec_recall <- function(x, y) {
-  indx <- order(x, decreasing = TRUE)
+compute_prec_recall_noise <- function(x, y) {
+  indx <- order(x+runif(x)/10**5, decreasing = TRUE)
   tp   <- cumsum(y[indx])
-  cbind(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(x))
+  list(df = data.frame(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(x)),
+       avgppv = mean((tp/seq_along(x))[y[indx]>0]))
 }
 
-compute_prec_recall <- function(x, y) {
+compute_prec_recall <- function(x, y, expand = F) {
   
   indx <- order(x, decreasing = TRUE)
   tp   <- cumsum(y[indx])
@@ -95,15 +97,39 @@ compute_prec_recall <- function(x, y) {
   
   dups <- duplicated(x[indx], fromLast = TRUE)
   PPV  <- tp[!dups]/pp[!dups]
-  w    <- c(tp[1], diff(tp[!dups]))
-  rate <- PPV[length(PPV)]
-  
-  list(df = data.frame(x = c(Inf, x[indx][!dups], -Inf),
-                       TPR = c(0, tp[!dups]/n1, 1),
-                       PPV = c(1, PPV, rate)),
-       avgppv = 1/n1*sum(w*PPV))
+  w    <- diff(c(0, tp[!dups]))
+
+  if (expand){
+    rate <- PPV[length(PPV)]
+    list(df = data.frame(x = c(Inf, x[indx][!dups], -Inf),
+                         TPR = c(0, tp[!dups]/n1, 1),
+                         PPV = c(1, PPV, rate)),
+         avgppv = 1/n1*sum(w*PPV))
+  } else {
+    list(df = data.frame(x = x[indx][!dups],
+                         TPR = tp[!dups]/n1,
+                         PPV = PPV),
+         avgppv = 1/n1*sum(w*PPV))
+  }
+
 }
 
+if (FALSE) {
+  x <- c(rep(1, 10), 0, 0, 0, .5)
+  y <- c(rep(1, 3), rep(0, 7), c(0, 1, 1, 0))
+  tmp <- compute_prec_recall(x, y)
+  plot(tmp$df$TPR, tmp$df$PPV, xlim = c(0, 1), ylim = c(0, 1))
+  lines(tmp$df$TPR, tmp$df$PPV)
+  cat("\navgppv", tmp$avgppv)
+  
+  res <- numeric(100)
+  for (i in seq_along(res)) {
+    tmp <- compute_prec_recall_noise(x, y)
+    lines(tmp$df$TPR, tmp$df$PPV, col = "red")
+    res[i] <- tmp$avgppv
+  }
+  cat("\navgppv", mean(res))
+}
 
 compute_avgppv <- function(x, y) {
   
@@ -113,8 +139,18 @@ compute_avgppv <- function(x, y) {
   
   dups <- duplicated(x[indx], fromLast = TRUE)
   #cbind(dups, x[indx], c(y[indx]), tp, pp)
-  w <- c(tp[1], diff(tp[!dups]))/tp[length(x)]
+  
+  w <- diff(c(0, tp[!dups]))/tp[length(x)]
+  #cbind(tp = tp[!dups], pp = pp[!dups], tpr = tp[!dups]/tp[length(x)], ppv = tp[!dups]/pp[!dups], w)
+  
   sum(w*tp[!dups]/pp[!dups])
+}
+
+compute_avgppv_noise <- function(x, y) {
+  indx <- order(x+runif(length(x))/1000, decreasing = TRUE)
+  tp <- cumsum(y[indx])
+  pp <- seq_along(x)
+  mean((tp/pp)[y[indx] == 1])
 }
 res_to_df <- function(res, filepaths, names = c("network", "algo", "struct", "N", "epf", "r")) {
   

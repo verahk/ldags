@@ -108,7 +108,7 @@ bn <- ldags:::example_bn(bnname)
 data <- bida:::sample_data_from_bn(bn, N)
 nlev <- sapply(bn, function(x) dim(x$prob)[1])
 levels <- lapply(nlev-1, seq.int, from = 0)
-test <- run(bnname, init = "hcskel", struct = "ldag", sample = "partition", 
+run <- run(bnname, init = "hcskel", struct = "ldag", sample = "partition", 
             N = N, r = 1, edgepf = 2, regular = F, write_to_file = F, verbose = T)
 scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = 2, "ldag", F)
 scores <- numeric(length(bn))
@@ -119,6 +119,15 @@ for (j in seq_along(bn)) {
   stopifnot(scores[j] == BiDAG:::usrDAGcorescore(j, parentnodes, n, scorepar))
 }
 sum(scores) -test$score
+
+for (struct in c("ldag", "dag")) {
+  set.seed(N+r)
+  data <- bida:::sample_data_from_bn(bn, 1000)
+  scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = 2, local_struct = struct)
+  smpl <- sample_dags(scorepar, "pcskel", "order", 5, T)
+  cat("\nLocal structure:", struct, "score: ", smpl$score)
+  plot(smpl)
+}
 
 
 
