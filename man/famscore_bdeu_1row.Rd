@@ -2,7 +2,7 @@
 % Please edit documentation in R/famscore_bdeu_byrow.R
 \name{famscore_bdeu_1row}
 \alias{famscore_bdeu_1row}
-\title{Compute BDEU-score for each parent config}
+\title{Compute BDEu-score for each parent config}
 \usage{
 famscore_bdeu_1row(x, ess, r = length(x), q = 1, s = 1)
 }
@@ -15,5 +15,5 @@ famscore_bdeu_1row(x, ess, r = length(x), q = 1, s = 1)
 an array with score for each parent config
 }
 \description{
-Compute BDEU-score for each parent config
+Compute BDEu-score for each parent config
 }

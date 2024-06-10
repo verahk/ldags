@@ -1,0 +1,77 @@
+
+# Test score table 
+Test the `score_from_lookup` function. For a given node `j` and parent set `parentnodes` this function search in a `rlang::env` list-object `lookup` for the score. If the score is not already computed, it is computed and added to `lookup`. 
+```{r}
+
+n <- 5
+levels <- rep(list(0:1), n)
+data <- sapply(levels, sample, size = 100, replace = T)
+tab <- rlang::new_environment(list(tree = list()))
+ess <- 1
+
+tester <- function(j, parentnodes) {
+  ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, ess, 
+                            method = "tree", regular = FALSE, lookup = tab)
+}
+```
+
+```{r}
+cat("\nEmpty parent set (no CPT-partition-optimization):\n")
+j <- 1
+parentnodes <- vector("integer")
+tester(j, parentnodes)
+ls.str(tab)
+
+cat("\nOne parent (no CPT-partition-optimization):\n")
+j <- 1
+parentnodes <- 2
+tester(j, parentnodes)
+ls.str(tab)
+
+cat("\nMultiple parents:\n")
+j <- 1
+parentnodes <- 2:5
+tester(j, parentnodes)
+ls.str(tab)
+```
+
+
+# Score equivalence 
+```{r}
+n <- 3
+levels <- setNames(rep(list(0:1), n), c("Z", "X", "Y"))
+
+dag <- matrix(0, n, n)
+dag[upper.tri(dag)] <- 1
+colnames(dag) <- rownames(dag) <- c("Z", "X", "Y")
+labels <- list(NULL, NULL, list(NULL, rbind(0)))
+cpts <- lapply(seq_along(levels), 
+               function(node) cpt_from_dag(dag, levels, labels, node))
+
+data <- replicate(n, sample(0:1, 100, T))
+for (i in 1:n) {
+  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
+  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
+}
+sum(sapply(cpts, "[[", "score"))
+
+# compute score of CSI-equiv DAG
+dag["X", "Y"] <- 0
+dag["Y", "X"] <- 1
+labels <- list(NULL, list(NULL, rbind(0)), NULL)
+cpts <- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
+for (i in 1:n) {
+  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
+  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
+}
+sum(sapply(cpts, "[[", "score"))
+
+dag["Y", "X"] <- 0
+labels <- NULL
+cpts <- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
+for (i in 1:n) {
+  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
+  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
+}
+sum(sapply(cpts, "[[", "score"))
+```

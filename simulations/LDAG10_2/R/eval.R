@@ -15,25 +15,6 @@ eval_files <- function(filepaths, bnname) {
                  .packages = "Matrix",
                  .export = export) %dopar% eval_MCMCchain(f, seq_len(200), dag, dmat, n)
 }
-eval_files <- function(filepaths, bnname, N, r) {
-  
-  indx <- grepl(bnname, filepaths, T)
-  if (!all(indx)) stop("All files do not match bnname.")
-  
-  #bn <- readRDS(here::here("./data/", paste0(bnname, ".rds")))
-  set.seed(r+N)
-  bn <- ldags:::example_bn(bnname)
-  n  <-  length(bn)
-  dindx <- diag(n) == 1
-  dag  <- bnlearn::amat(bn)[!dindx]
-  dmat <- bida:::descendants(bn)[!dindx]
-  
-  export <- c("eval_MCMCchain", "compute_prec_recall", "compute_avgppv", "compute_prec_recall_noise", "compute_avgppv_noise")
-  res <- foreach(f = filepaths, 
-                 .combine  = "rbind",
-                 .packages = "Matrix",
-                 .export = export) %dopar% eval_MCMCchain(f, seq_len(200), dag, dmat, n)
-}
 
 
 eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {

@@ -2,7 +2,7 @@
 
 
 
-#' Compute BDEU-score for each parent config
+#' Compute BDEu-score for each parent config
 #'
 #' @param x a matrix with observed counts
 #' @param ess

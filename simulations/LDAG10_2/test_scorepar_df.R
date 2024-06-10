@@ -23,4 +23,6 @@ for (j in seq_along(bn)) {
   score2 <- BiDAG:::DAGcorescore(j, parentnodes, n, scorepar2)
   stopifnot(score1 == score2)
 }
+
+smpl <- sample_dags(scorepar, "pcskel", "order", verbose = T)
   

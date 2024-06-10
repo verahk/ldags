@@ -40,7 +40,7 @@ rand_bn <- function(dag, partitions = NULL, nlev = rep(2, ncol(dag)), alpha = 1)
       p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)
     } else {
       q <- length((partitions[[j]]))
-      indx <- unlist_partition(partitions[[j]])
+      indx <- get_parts(partitions[[j]])
       p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)[, indx]
     }
     dim(p) <- nlev[c(j, pa)]
@@ -53,18 +53,4 @@ rand_bn <- function(dag, partitions = NULL, nlev = rep(2, ncol(dag)), alpha = 1)
   g <- bnlearn::empty.graph(vars)
   bnlearn::amat(g) <- dag
   bnlearn::custom.fit(g, cpts)
-}
-rand_cpt_array <- function(var, parnames, dim, alpha, partition = NULL) {
- r <- dim[1]
-
- if (is.null(partition)) {
-   q <- prod(dim[-1])
-   p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)
- } else {
-   q <- length(unique(partition))
-   p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)[, partition]
- }
-  dim(p) <- dim
-  dimnames(p) <- setNames(vector("list", 1+length(parnames)), c(var, parnames))
-  return(p)
 }

@@ -2,68 +2,33 @@
 % Please edit documentation in R/sample_dags.R
 \name{sample_dags}
 \alias{sample_dags}
-\title{Sample DAGs with local structure}
+\title{Title}
 \usage{
 sample_dags(
-  data,
-  nlev,
-  algo = "order",
-  ess = 1,
-  edgepf = 2,
+  scorepar,
+  algo_init = "pcskel",
+  algo_sample = "order",
   hardlimit = 5,
-  local_struct = NULL,
-  verbose = FALSE,
-  lookup = NULL
+  verbose = F
 )
 }
 \arguments{
-\item{data}{(integer matrix)}
+\item{scorepar}{(object of class \link[BiDAG:scoreparameters]{BiDAG::scoreparameters})
+See \link{define_scorepar}.}
 
-\item{nlev}{(integer vector)}
+\item{algo_init}{(character)
+Name of optimization routine for local structure.
+See \link{optimize_partition}.}
 
-\item{algo}{(character)
-which MCMC-scheme to employ for sampling DAGs given a search space. Either
-\code{"partition"} or \code{"order"}. See \link[BiDAG:sampleBN]{BiDAG::sampleBN}.}
-
-\item{ess}{(numeric)}
-
-\item{edgepf}{(numeric)
-edge penalty}
+\item{algo_sample}{(character)
+Name of MCMC implementation. Either \code{partition} or \code{order}.
+See \link[BiDAG:sampleBN]{BiDAG::sampleBN}.}
 
 \item{hardlimit}{(integer)
-maximum number of parents.}
-
-\item{local_struct}{(character)
-greedy optimization routine to optimize the local structure. Either \code{tree} or
-\code{ldag}. If \code{NULL} (default), no local structure is optimized.}
+Maximal number of parents allowed. See \link[BiDAG:learnBN]{BiDAG::learnBN}.}
 
 \item{verbose}{(logical)}
-
-\item{lookup}{(environment)
-a environment in which the optimized local structures is stored.
-Generated e.g. with \link[rlang:env]{rlang::new_environment}. See \link{score_from_lookup}.}
 }
 \description{
-Apply hybrid sampling scheme provided by the \code{BiDAG}-package with user-defined
-scoring functions to sample DAGs with optimized local structure.
-Use \code{bnlearn::hc} to definine a CPDAG for the initial search space, limiting
-the maximum number of parents.
-}
-\examples{
-bn <- example_bn("LDAG10")
-nlev <- vapply(bn, function(x) dim(x$prob)[1], integer(1))
-data <- bida:::sample_data_from_bn(bn, 1000)
-lookup <- rlang::new_environment() 
-
-smpl_tree <- sample_dags(data, nlev, algo = "order", local_struct = "tree", verbose = T, lookup = lookup)
-smpl_ldag <- sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup)
-smpl_dag  <- sample_dags(data, nlev, algo = "order", local_struct = NULL, verbose = T, lookup = lookup)    
-
-edgep <- cbind(tree = c(BiDAG::edgep(smpl_tree)), 
-               ldag = c(BiDAG::edgep(smpl_ldag)),
-               dag  = c(BiDAG::edgep(smpl_dag)))
-               
-pairs(edgep)
-
-profvis::profvis(sample_dags(data, nlev, algo = "order", local_struct = "ldag", verbose = T, lookup = lookup))
+Title
 }

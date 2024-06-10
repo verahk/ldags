@@ -10,6 +10,7 @@ optimize_partition_part(
   ess,
   P = as.list(1:nrow(counts) - 1),
   lkappa = 0,
+  ldag_consistent = T,
   verbose = FALSE
 )
 }

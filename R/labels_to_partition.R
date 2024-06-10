@@ -26,14 +26,14 @@
 #' label[[2]] <- c(0)
 #' part2 <- labels_to_partition(label, levels, type = "enumerated")
 #' 
-#' cbind(expand.grid(levels),  unlist_partition(part1), unlist_partition(part2))
+#' cbind(expand.grid(levels),  get_partitions(part1), get_partitions(part2))
 #'
 labels_to_partition <- function(labels, levels, nlev = lengths(levels), type = "outcome_vectors") {
   
   n      <- length(nlev)
   cump   <- cumprod(nlev)
   stride <- c(1, cump[-n])
-  part   <- seq_len(cump[n])      # enumerate rows in full CPT
+  parts   <- seq_len(cump[n])      # enumerate rows in full CPT
     
   if (type == "outcome_vectors") {
     for (i in seq_along(labels)[lengths(labels) > 0]) {
@@ -51,8 +51,8 @@ labels_to_partition <- function(labels, levels, nlev = lengths(levels), type = "
           tmp <- lab[r, ]%*%stride[-i]
         }
         rows <- outer(c(tmp), levels[[i]]*stride[i] +1, "+")
-        regions_to_be_collapsed <- part[rows]
-        part[part %in% regions_to_be_collapsed] <- min(regions_to_be_collapsed)
+        regions_to_be_collapsed <- parts[rows]
+        parts[parts %in% regions_to_be_collapsed] <- min(regions_to_be_collapsed)
       }
     }
 
@@ -60,8 +60,8 @@ labels_to_partition <- function(labels, levels, nlev = lengths(levels), type = "
     for (i in seq_along(labels)[lengths(labels) > 0]) {
       rows <- outer(labels[[i]], levels[[i]]*stride[i] +1, "+")
       for (r in 1:nrow(rows)) {
-        regions_to_be_collapsed <- part[rows[r, ]]
-        part[part %in% regions_to_be_collapsed] <- min(regions_to_be_collapsed)
+        regions_to_be_collapsed <- parts[rows[r, ]]
+        parts[parts %in% regions_to_be_collapsed] <- min(regions_to_be_collapsed)
       }
     }
   }

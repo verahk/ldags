@@ -29,10 +29,5 @@ score_from_lookup <- function(data, levels, nlev = lengths(levels), j, parentnod
 }
 
 
-init_lookup_table <- function(n, methods) {
-  rlang::new_environment(list(scores = list(),
-                              counts = list()))
-}
-
 
 

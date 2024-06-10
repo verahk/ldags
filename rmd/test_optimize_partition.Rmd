@@ -12,8 +12,8 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r, results = "hide"}
 library(pcalg) # for as(adjmat, "graphNEL")
+library(ldags)
 here::i_am("./rmd/test_optimize_partition.Rmd")
-sapply(list.files(here::here("./R/"), ".R", full.names = T), source, echo = F)
 ```
 
 ## Test optmization routines
@@ -23,10 +23,12 @@ tester <- function(counts, levels, methods = c("tree", "ldag", "part"), regular 
   df <- cbind(expand.grid(levels), n = counts)
   scores <- setNames(numeric(length(methods)), methods)
   for (method in methods) {
-    res <- ldags:::optimize_partition(counts, levels, ess = 1, method, make_regular = regular)
-    df[[method]] <- ldags:::unlist_partition(res$partition)
+    res <- optimize_partition(counts, levels, ess = 1, method, regular = regular)
+    df[[method]] <- get_parts(res$partition)
     scores[method] <- sum(res$scores)
   }
+  df[["none"]] <- seq_len(nrow(counts))
+  scores["none"] <- sum(compute_local_bdeu_score(counts, 1))
   return(list(df, scores))
 }
 ```
@@ -48,11 +50,11 @@ tester(counts, levels)
 The `tree`-partition returns only one region, i.e. the no-parent CPT, as the score is not improved by splitting on any of the parent variables for the given frequency table. 
 ```{r}
 cat("Score, P(Y|X1, X2):")
-sum(famscore_bdeu_byrow(counts, ess = 1, r = 2, q = 4, s = 1))
+compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1)
 cat("Score, P(Y|X2):")
-sum(famscore_bdeu_byrow(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat("Score P(Y):")
-famscore_bdeu_byrow(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
+compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
 ```
 The `make_regular` option of the `optimize_partition` function forces a partition that do not implicitly encode any conditional independencies.
 ```{r}
@@ -77,82 +79,7 @@ cat("Score P(Y):")
 famscore_bdeu_byrow(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
 ```
 
-# Test score table 
-Test the `score_from_lookup` function. For a given node `j` and parent set `parentnodes` this function search in a `rlang::env` list-object `lookup` for the score. If the score is not already computed, it is computed and added to `lookup`. 
-```{r}
 
-n <- 5
-levels <- rep(list(0:1), n)
-data <- sapply(levels, sample, size = 100, replace = T)
-tab <- rlang::new_environment(list(tree = list()))
-ess <- 1
-
-tester <- function(j, parentnodes) {
-  ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, ess, 
-                            method = "tree", regular = FALSE, lookup = tab)
-}
-```
-
-```{r}
-cat("\nEmpty parent set (no CPT-partition-optimization):\n")
-j <- 1
-parentnodes <- vector("integer")
-tester(j, parentnodes)
-ls.str(tab)
-
-cat("\nOne parent (no CPT-partition-optimization):\n")
-j <- 1
-parentnodes <- 2
-tester(j, parentnodes)
-ls.str(tab)
-
-cat("\nMultiple parents:\n")
-j <- 1
-parentnodes <- 2:5
-tester(j, parentnodes)
-ls.str(tab)
-```
-
-
-# Score equivalence 
-```{r}
-n <- 3
-levels <- setNames(rep(list(0:1), n), c("Z", "X", "Y"))
-
-dag <- matrix(0, n, n)
-dag[upper.tri(dag)] <- 1
-colnames(dag) <- rownames(dag) <- c("Z", "X", "Y")
-labels <- list(NULL, NULL, list(NULL, rbind(0)))
-cpts <- lapply(seq_along(levels), 
-               function(node) cpt_from_dag(dag, levels, labels, node))
-
-data <- replicate(n, sample(0:1, 100, T))
-for (i in 1:n) {
-  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, "[[", "score"))
-
-# compute score of CSI-equiv DAG
-dag["X", "Y"] <- 0
-dag["Y", "X"] <- 1
-labels <- list(NULL, list(NULL, rbind(0)), NULL)
-cpts <- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
-for (i in 1:n) {
-  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, "[[", "score"))
-
-dag["Y", "X"] <- 0
-labels <- NULL
-cpts <- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
-for (i in 1:n) {
-  cpts[[i]]$counts <- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  <- compute_local_bdeu_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, "[[", "score"))
-```
 # Compare optimized partitions and search-through-labels routine coincide
 ```{r}
 
@@ -165,156 +92,81 @@ for (i in 1:100) {
   counts <- matrix(rgamma(2**(3+1), shape = 1), ncol = 2)
   fits <- list()
 
-  fits$part <- optimize_partition(counts, levels, ess, "part", make_regular = F, F)
-  fits$ldag <- optimize_partition(counts, levels, ess, "ldag", make_regular = F, F)
-  fits$tree <- optimize_partition(counts, levels, ess, "tree", make_regular = F, F)
+  fits$part <- optimize_partition(counts, levels, ess, "part", regular = F, F)
+  fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = F, F)
+
+  partitions <- sapply(lapply(fits, "[[", "partition"), get_parts)
   
-  partitions <- sapply(lapply(fits, "[[", "partition"), unlist_partition)
   
+  # stop and print output if part and ldag do not coincide
   if (!all(partitions[, "part"] == partitions[, "ldag"])) {
-      cbind(expand.grid(levels), partitions)
-  cat("\npart:")
-  fits$part <- optimize_partition(counts, levels, ess, "part", make_regular = F, T)
-  cat("\nldag:")
-  fits$ldag <- optimize_partition(counts, levels, ess, "ldag", make_regular = F, T)
+    cbind(expand.grid(levels), partitions)
+    
+    cat("\npart:")
+    fits$part <- optimize_partition(counts, levels, ess, "part", regular = F, T)
+    cat("\nldag:")
+    fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = F, T)
+    
+    is_CSI_consistent(fits$part$partition, nlev)
+    is_regular(fits$part$partition, nlev)
+    
+    is_CSI_consistent(fits$ldag$partition, nlev)
+    is_regular(fits$ldag$partition, nlev)
+    break
+  }
+}
+
+
+```
+
+
+
+```{r}
+bn   <- readRDS(here::here("./data/LDAG10.rds"))
+dag  <- bnlearn::amat(bn)
+nlev <- rep(2, 10)  
+levels <- lapply(nlev-1, seq.int, from = 0)
+
+data <- bida:::sample_data_from_bn(bn, 10**6)
+
+for (i in seq_along(bn)) {
+  par <- which(dag[, i] == 1)
+  if (length(par) < 2) next 
   
-      is_ldag_consistent(fits$part$partition, nlev)
-      is_regular(fits$part$partition, nlev)
-      
-      is_ldag_consistent(fits$ldag$partition, nlev)
-      is_regular(fits$ldag$partition, nlev)
-      break
-  }
-}
-
-
-
-
-```
-
-
-# Test BiDAG
-```{r}
-dag <- rbind(L  = c(0, 1, 1, 0, 1),
-             Z1 = c(0, 0, 0, 1, 0),
-             Z2 = c(0, 0, 0, 1, 0),
-             X  = c(0, 0, 0, 0, 1),
-             Y  = rep(0, 5))
-colnames(dag) <- rownames(dag)
-n <- ncol(dag)
-levels <- rep(list(0:1), n)
-nlev <- lengths(levels)
-
-labmat <- matrix(list(), n, n)
-labmat[[2, 4]] <- rbind(0)  # Z1 -> X
-labmat[[3, 4]] <- rbind(0)  # Z2 -> X
-labmat[[4, 5]] <- rbind(0)  # X -> Y
-
-# plot
-g <- as(dag, "graphNEL")
-indx <- sapply(labmat[dag == 1], is.null)
-prettify_lab <- function(x, from, to) {
-
-}
-
-lab <- c()
-for (i in seq_len(ncol(dag))) {
-  for (j in seq_len(ncol(dag))) {
-    if (is.null(labmat[[i, j]])) next
-    tmp <- apply(labmat[[i, j]], 1, function(y) sprintf("(%s)",  paste(y, collapse = ",")))
-    tmp <- sprintf("{%s}", paste(gsub("NA", "*", tmp), collapse = ","))
-    names(tmp) <- sprintf("%s~%s", colnames(dag)[i], colnames(dag)[j])
-    lab  <- append(lab, tmp)
-  }
-}
-fonts <- rep(10, length(lab))
-names(fonts) <- names(lab)
-Rgraphviz::plot(g, edgeAttrs = list(label = lab, fontsize = fonts))
-```
-
-
-Draw a distribution over the labeled DAG:
-```{r}
-set.seed(007)
-partitions <- vector("list", ncol(dag))
-for (i in 1:ncol(dag)) {
-  pa   <- which(dag[, i] == 1)
-  if (length(pa) > 1) {
-     labs <- labmat[pa, i]
-     if (any(lengths(labs) > 0)) {
-       partitions[[i]] <- labels_to_partition(labs, levels[pa], type = "outcome_vectors")
-     }
-  }
-}
-nlev <- rep(2, ncol(dag))
-bn <- rand_bn(dag, partitions, nlev, alpha = 1)
-bn
-```
-
-
-```{r}
-library(BiDAG)
-data <- bida:::sample_data_from_bn(bn, 1000)
-scorepar <- scoreparameters("usr", 
-                             data = data,
-                             usrpar = list(pctesttype = "bdecat"))
-
-scorepar$Cvec <- nlev
-scorepar$levels <- lapply(scorepar$Cvec-1, seq.int, from = 0)
-scorepar$lookup  <- rlang::new_environment(list())
-scorepar$ess <- 1
-ls.str(scorepar$lookup)
-
-# wrapper function
-usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
-  score_from_lookup(scorepar$data, 
-                    levels = scorepar$levels, 
-                    nlev = scorepar$Cvec, 
-                    j, 
-                    parentnodes, 
-                    ess = scorepar$ess,
-                    method = scorepar$optPartMethod, 
-                    regular = FALSE,
-                    lookup = scorepar$lookup)
-}
-
-# assign to namespace
-assignInNamespace("usrDAGcorescore", usrDAGcorescore, ns = "BiDAG")
-
-```
-
-```{r}
-for (optPartMethod in c("tree", "ldag", "part")){
-  cat("\n", optPartMethod, "---\n")
-  scorepar$optPartMethod <- optPartMethod
-  assign(optPartMethod, list(), scorepar$lookup)
-  cat("No parents:\n")
-  print(usrDAGcorescore(4, integer(0), ncol(dag), scorepar))
-  cat("One parent:\n")
-  print(usrDAGcorescore(4, 2, ncol(dag), scorepar))
+  parts  <- list()
+  cpt <- aperm(bn[[i]]$prob, c(seq_along(par)+1, 1))
+  dim(cpt) <- c(prod(nlev[par]), nlev[i]) 
+  parts$true <- match(cpt[, 1], cpt[, 1]) 
   
-  cat("Both parents:\n")
-  print(usrDAGcorescore(5, 2:3, ncol(dag), scorepar))
-}
-
+  counts <- compute_freq_table(data, nlev, i, par)
+  fit    <- optimize_partition(counts, levels[par], 1, "tree", verbose = F)
+  parts$tree  <- get_parts(fit$partition)
+  
+  fit    <- optimize_partition(counts, levels[par], 1, "ldag", verbose = F)
+  parts$ldag  <- get_parts(fit$partition)
+  
+  cat("\nVariable:", i, "True partition:", parts$true, "\n")
+  tabs <- lapply(parts[-1], function(x) table(parts$true, x))
+  print(lapply(tabs, function(x) colSums(x > 0)))
+  
+  #print(data.frame(cpt[, 1], parts))
+}            
 ```
 
-```{r}
-table(data.frame(data[, c("Y", "L", "X")]))
-compute_freq_table(data, nlev, 5, c(1, 4))
-```
-
 
 ```{r}
-res <- list()
-for (optPartMethod in c("ldag", "tree")) {
-  cat("\n", optPartMethod, "\n")
-  scorepar$optPartMethod <- optPartMethod
-  scorepar$lookup[[optPartMethod]] <- list()
-  res[[optPartMethod]] <- try(sampleBN(scorepar, algo = "orderIter", verbose = T, hardlimit = 3))
-  ls.str(scorepar$lookup)
-}
 
+i <- 3
+par <- which(dag[, i] == 1)
+counts <- compute_freq_table(data, nlev, i, par)
+microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, "part"),
+                               optimize_partition(counts, levels[par], 1, "ldag"))
+
+i <- 10
+par <- which(dag[, i] == 1)
+counts <- compute_freq_table(data, nlev, i, par)
+microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, "part"),
+                               optimize_partition(counts, levels[par], 1, "ldag"))
 ```
 
 
