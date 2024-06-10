@@ -13,7 +13,7 @@
 #' levels <- list(0:1, 0:2)
 #' counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
 #' res <- optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
-#' cbind(expand.grid(levels), n = counts, part = unlist_partition(res$partition))
+#' cbind(expand.grid(levels), n = counts, part = get_parts(res$partition))
 optimize_partition_ldag <- function(counts, levels, ess, 
                                     P = as.list(1:nrow(counts)-1), 
                                     labels = rep(list(integer()), length(levels)), 
@@ -29,7 +29,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
   #conf_enum_par <- conf_enum - sweep(conf, 2, stride, "*")
   
   # compute seach part's contribution to the local score
-  partition   <- unlist_partition(P)
+  partition   <- get_parts(P)
   part_size   <- lengths(P)
   part_counts <- rowsum(counts, partition, reorder = T)
   part_scores <- famscore_bdeu_byrow(part_counts, ess, r, q, part_size)
@@ -62,7 +62,8 @@ optimize_partition_ldag <- function(counts, levels, ess,
     
     # add redundant labels to current set of labels
     if (any(redundant_labels)) {
-      if (verbose) cat("\nAdd implicit labels: node", i, "contexts = ", paste(contexts[redundant_labels], collapse = ","))
+      if (verbose) cat("\nAdd implicit labels: node", i, 
+                       "contexts = ", paste(contexts[redundant_labels], collapse = ","))
       labels[[i]] <- append(labels[[i]], contexts[redundant_labels])
       if (all(redundant_labels)) next 
       parts <- parts[!redundant_labels, , drop = F]
@@ -92,7 +93,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
         
         # check if regular 
         PP <- c(P[-collapse], list(unlist(P[collapse])))
-        if (!all(is_regular(PP,  nlev, stride)))  next 
+        if (!is_regular(PP,  nlev, stride))  next 
         
         if (any(dups)) {
           # find all labels implied by collapsing the two parts
@@ -130,12 +131,12 @@ optimize_partition_ldag <- function(counts, levels, ess,
     labels[[best_lab$node]] <- c(labels[[best_lab$node]], best_lab$context)
     P <- best_partition 
     
-    if (verbose) cat(sprintf("\ndiff = %s, node %s, context = %s, parts = %s, new partition: %s",
+    if (verbose) cat(sprintf("\ndiff = %.5f, node %s, context = %s, parts = %s, new partition: %s",
                              best_diff,
                              best_lab$node, 
                              paste(best_lab$context, collapse = ","),
                              paste(best_lab$parts, collapse = ","),
-                             paste(unlist_partition(P), collapse = " ")))
+                             paste(get_parts(P), collapse = " ")))
    
     
     return(optimize_partition_ldag(counts, levels, ess, P, labels, conf, verbose))
@@ -168,7 +169,13 @@ find_duplicated_rows <- function(x){
 }
 
 
+# profiling ----
 if (FALSE) {
+  
+  levels <- rep(list(0:2), 3)
+  counts <- matrix(rgamma(prod(lengths(levels))*3, 10), ncol = 3)
+  res <- optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
+  
   all_elem_equal <- function(y) vapply(y, function(x) all(x == x[1]), logical(1))
   all_elem_equal2 <- function(y) vapply(y, function(x) length(unique(x)), integer(1)) == 1
   all_elem_equal3 <- function(m) rowSums(m == m[, 1]) == 1

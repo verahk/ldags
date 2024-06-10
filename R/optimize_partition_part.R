@@ -16,14 +16,14 @@
 #' levels <- list(0:1, 0:1)
 #' counts <- cbind(c(10, 100, 100, 100), rep(10, 4))
 #' optimize_partition_part(counts, levels, ess = 1, verbose = T)
-optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(counts)-1), lkappa = 0, verbose = FALSE){
+optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(counts)-1), lkappa = 0, ldag_consistent = T, verbose = FALSE){
   
   q   <- nrow(counts)
   r   <- ncol(counts)
 
   # compute seach part's contribution to the local score
   part_size   <- lengths(P)
-  part_counts <- rowsum(counts, unlist_partition(P, part_size), reorder = T)
+  part_counts <- rowsum(counts, get_parts(P, part_size), reorder = T)
   part_scores <- famscore_bdeu_byrow(part_counts, ess, r, q, part_size)
   
   # find the two current parts that increase the score most if collapsed
@@ -33,7 +33,7 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
     nlev <- lengths(levels)
     stopifnot(all(nlev == 2))
     stride <- c(1, cumprod(nlev[-length(nlev)]))
-    joint <- seq_len(prod(nlev))-1 
+ 
     
     for (i in seq.int(1, length(P)-1)) {
       for (j in seq.int(i+1, length(P))) {
@@ -51,13 +51,14 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
         # compare score with current best partition
         if (diff > best_diff) {
           
-          if (!is_ldag_consistent_part(new_part, nlev, stride, joint)) next 
+          if (ldag_consistent && !is_CSI_consistent_part(new_part, levels, nlev, stride)) next 
           
           # candidate partition
           PP  <- c(P[-c(i, j)], list(new_part))
           
           # check if collapsing part i and j result in regular partition
-          if (!all(is_regular(PP,  nlev, stride)))  next
+          if (ldag_consistent && !is_regular(PP, nlev, stride))  next
+       
           best_diff <- diff
           best_partition <- PP
           best_parts <- c(i, j)
@@ -68,12 +69,12 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
   }
   
   if (keep_climb) {
-    if (verbose) cat(sprintf("\ndiff = %s, parts = %s, new partition: %s",
+    if (verbose) cat(sprintf("\ndiff = %.5f, parts = %s, new partition: %s",
                              best_diff,
                              paste(best_parts, collapse = ","),
-                             paste(unlist_partition(best_partition), collapse = " ")))
+                             paste(get_parts(best_partition), collapse = " ")))
     
-    optimize_partition_part(counts, levels,  ess, best_partition,  lkappa, verbose)
+    optimize_partition_part(counts, levels,  ess, best_partition,  lkappa, ldag_consistent, verbose)
   } else {
     return(list(partition = P, counts = part_counts, scores = part_scores))
   }
