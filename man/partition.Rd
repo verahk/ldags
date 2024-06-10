@@ -8,7 +8,7 @@
 \usage{
 new_partition(x, nlev)
 
-get_parts(P)
+get_parts(P, lens = lengths(P))
 }
 \arguments{
 \item{x}{(list)
@@ -27,7 +27,7 @@ an object of class \code{partition}
 }
 }
 \description{
-An object of class \code{partition} is a list that defines the partition of the
+An object of class \code{partition} is a list that defines for a partition of the
 outcome space of a set of categorical variables.
 }
 \examples{

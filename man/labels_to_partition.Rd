@@ -39,6 +39,6 @@ label[[1]] <- c(0, 2, 4, 6)
 label[[2]] <- c(0)
 part2 <- labels_to_partition(label, levels, type = "enumerated")
 
-cbind(expand.grid(levels),  unlist_partition(part1), unlist_partition(part2))
+cbind(expand.grid(levels),  get_partitions(part1), get_partitions(part2))
 
 }

@@ -5,9 +5,14 @@
 \alias{is_CSI_consistent_part}
 \title{Check if a partition is CSI consistent}
 \usage{
-is_CSI_consistent(P, levels)
+is_CSI_consistent(
+  P,
+  levels,
+  nlev = lengths(levels),
+  stride = c(1, cumprod(nlev[-length(nlev)]))
+)
 
-is_CSI_consistent_part(p, levels, stride)
+is_CSI_consistent_part(p, levels, nlev, stride)
 }
 \arguments{
 \item{P}{(list of integer vectors)
@@ -17,11 +22,11 @@ enumerating the joint outcomes from \code{0} to \code{prod(lengths(nlev))-1}.}
 \item{levels}{(list of integer vectors)
 a list with outcomes of each variable.}
 
-\item{p}{(integer vector)
-a part of \code{P}, i.e. a subset of joint outcomes.}
-
 \item{stride}{(integer vector)
 the stride of each variable, corresponding to levels.}
+
+\item{p}{(integer vector)
+a part of \code{P}, i.e. a subset of joint outcomes.}
 }
 \value{
 a logical constant
@@ -34,13 +39,18 @@ levels <- list(0:1, 0:1)
 
 # CSI-consistent
 P <- list(c(0, 1, 3), 2)
-is_CSI_consistent_partition(P, levels)
+is_CSI_consistent(P, levels)
 
 # not CSI-consistent partition
 P <- list(c(0, 3), 2, 1)
-is_CSI_consistent_partition(P, levels)
+is_CSI_consistent(P, levels)
+
+P <- list(0, 1:2, 3)
+is_CSI_consistent(P, levels)
+
 
 # CSI-consistent, but not regular
 P <- list(c(0, 1), c(2, 3))
-is_CSI_consistent_partition(P, levels)
+is_CSI_consistent(P, levels)
+is_regular(P, lengths(levels))
 }

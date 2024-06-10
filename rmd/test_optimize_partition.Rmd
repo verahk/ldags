@@ -127,6 +127,7 @@ dag  <- bnlearn::amat(bn)
 nlev <- rep(2, 10)  
 levels <- lapply(nlev-1, seq.int, from = 0)
 
+bn <- example_bn("LDAG10")
 data <- bida:::sample_data_from_bn(bn, 10**6)
 
 for (i in seq_along(bn)) {
@@ -145,11 +146,13 @@ for (i in seq_along(bn)) {
   fit    <- optimize_partition(counts, levels[par], 1, "ldag", verbose = F)
   parts$ldag  <- get_parts(fit$partition)
   
-  cat("\nVariable:", i, "True partition:", parts$true, "\n")
+  cat("\nVariable:", i, 
+      "True length:", length(unique(parts$true)), 
+      "True partition:", parts$true, "\n")
   tabs <- lapply(parts[-1], function(x) table(parts$true, x))
   print(lapply(tabs, function(x) colSums(x > 0)))
   
-  #print(data.frame(cpt[, 1], parts))
+  #print(data.frame(cpt[, 1], counts, parts))
 }            
 ```
 

@@ -2,12 +2,9 @@
 % Please edit documentation in R/is_regular.R
 \name{is_regular}
 \alias{is_regular}
-\alias{is_regular_varwise}
 \title{Check if partition is regular.}
 \usage{
 is_regular(P, nlev, stride = c(1, cumprod(nlev[-length(nlev)])))
-
-is_regular_varwise(P, nlev, stride, i)
 }
 \arguments{
 \item{P}{a partitioning of a outcome space.
@@ -16,8 +13,6 @@ See class documentation \code{\link[=partition]{partition()}}.}
 \item{nlev}{}
 
 \item{stride}{}
-
-\item{i}{(integer) variable}
 }
 \value{
 a logical constant; \code{TRUE} if partition is regular, \code{FALSE} otherwise.
@@ -28,27 +23,23 @@ That is, the partition is independent of one or more conditioning variable(s).
 The function iterates through each conditioning variable until a variable and
 return \code{FALSE} such a variable is met.
 }
-\details{
-\code{is_regular_varwise} checks if \code{P} is regular with respect to a single
-variable \code{i}.
-}
 \examples{
 
 # check if partition is regular 
-nlev   <- c(2, 2, 2)
+nlev   <- c(2, 2)
 
 ## regular 
-P <- list(0, 1:7)
+P <- list(0, 1:3)
 is_regular(P, nlev)
 
-P <- list(0:2, 3:7)
+P <- list(c(0, 3), c(1, 2)) 
 is_regular(P, nlev)
 
 ## not regular
-P <- list(0:7)
+P <- list(0:3)
 is_regular(P, nlev)
 
-P <- list(0:1, 2:3, 4:5, 6:7)
+P <- list(0:1, 2:3)
 is_regular(P, nlev)
 }
 \seealso{
