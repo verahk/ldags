@@ -29,7 +29,7 @@ sample_dags <- function(scorepar, algo_init = "pcskel", algo_sample = "order", h
   # expand search space
   if (verbose) cat("\nExpand search space using BiDAG::iterativeMCMC:")
   #iterfit <- BiDAG::iterativeMCMC(scorepar, hardlimit = hardlimit, startspace = startspace, scoreout = T, verbose = verbose)
-  iterfit <- BiDAG::learnBN(scorepar, "orderIter", hardlimit = 5, startspace = startspace, scoreout = T, verbose = verbose)
+  iterfit <- BiDAG::learnBN(scorepar, "orderIter", hardlimit = hardlimit, startspace = startspace, scoreout = T, verbose = verbose)
   tic <- c(tic, expand = Sys.time())
   
   # run MCMC 
