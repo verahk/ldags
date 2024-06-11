@@ -1,4 +1,4 @@
-starting worker for localhost:11209 
+starting worker for localhost:11087 
 Type: EXEC 
 Type: EXEC 
 Type: EXEC 
@@ -8,14 +8,11 @@ Type: EXEC
 Type: EXEC 
 Type: EXEC 
 
-Started run with: pcskel dag order TRUEType: EXEC 
-Type: EXEC 
-
-Started run with: pcskel dag order TRUEType: EXTyError in unserialize(node$con) : error reading from cError in unserialize(node$con) : error reading from connection
+Started run with: pcskel dag order TRUETypeTError in unserialize(node$con) : error reading from Error in unserialize(node$con) : error reading from connection
 Calls: local ... doTryCatch -> recvData -> recvData.SOCKnode -> unserialize
 Execution halted
-recvData.SOCKnode -> unserialize
+ -> recvData.SOCKnode -> unserialize
 Execution halted
-cskel ldag order FALSEError in unserialize(node$con) : error reading from connection
+ag order FALSEError in unserialize(node$con) : error reading from connection
 Calls: local ... doTryCatch -> recvData -> recvData.SOCKnode -> unserialize
 Execution halted

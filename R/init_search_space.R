@@ -49,7 +49,7 @@ init_search_space <- function(scorepar, algo_init, hardlimit, maxp = hardlimit, 
 
   if (! any(colSums(startspace) > hardlimit)) {
     return(startspace)
-  } else if (maxp > 1 && alpha > .001) {
+  } else if (maxp > 1 && alpha > 10**-5) {
     init_search_space(scorepar, algo_init, hardlimit, maxp = maxp-1, alpha = alpha/2, verbose)
   } else {
     cat("\nCould not find startspace satisfying `hardlimit`\n")

@@ -4,11 +4,7 @@ library(BiDAG)
 library(ldags)
 
 
-source("./simulations/LDAG10_2/R/define_scorepar.R")
-source("./simulations/LDAG10_2/R/init_search_space.R")
-source("./simulations/LDAG10_2/R/sample_dags.R")
-
-
+# prep ----
 bnname <- "LDAG10"
 bn <- readRDS(paste0("data/", bnname, ".rds"))
 
@@ -17,7 +13,13 @@ N <- 1000
 data <- bida:::sample_data_from_bn(bn, N)
 nlev <- sapply(bn, function(x) dim(x$prob)[1])
 
+simpar <- expand.grid(list(init = c("pcskel"),
+                           struct = c("dag", "tree", "ldag"),
+                           sample = c("partition", "order"),
+                           regular = c(TRUE, FALSE)), 
+                      stringsAsFactors = F)
 
+# functions ----
 run <- function(data, init, struct, sample, regular) {
   cat("\nStarted run with:", init, struct, sample, regular)
   ess <- 1
@@ -25,8 +27,8 @@ run <- function(data, init, struct, sample, regular) {
   edgepf <- 2
   
   if (struct == "dag" && regular == FALSE) return(NULL) 
-  scorepar <- define_scorepar(data, nlev, ess = ess, edgepf = edgepf, local_struct = struct, regular = regular)
-  smpls <- replicate(2, sample_dags(scorepar, init, sample, hardlimit = hardlimit), simplify = F)
+  scorepar <- ldags:::define_scorepar(data, nlev, ess = ess, edgepf = edgepf, local_struct = struct, regular = regular)
+  smpls <- replicate(2, ldags:::sample_dags(scorepar, init, sample, hardlimit = hardlimit), simplify = F)
   
   trace <- sapply(smpls, "[[", "trace")
   edgeps_dag <- lapply(smpls, BiDAG::edgep, pdag = F)
@@ -63,11 +65,7 @@ run <- function(data, init, struct, sample, regular) {
 run(data, "hc", "dag", "order", T)
 
 # run ----
-simpar <- expand.grid(list(init = c("pcskel"),
-                           struct = c("dag", "tree", "ldag"),
-                           sample = c("partition", "order"),
-                           regular = c(TRUE, FALSE)), 
-                      stringsAsFactors = F)
+
 
 file.remove("tmp.out")
 cl <- makeCluster(4, type = "SOCK", outfile = "tmp.out")
@@ -80,7 +78,8 @@ foreach(r = 1:nrow(simpar)) %dopar% run(data,
                                         simpar$sample[r],
                                         simpar$regular[r])
 
-# collect graphs in one markdown file ----
+# results ----
+# collect graphs in one markdown file 
 filepath <- "./simulations/LDAG10_2/convergence_plots/"
 filename <- paste0(filepath, "plots.md")
 cat("# Convergence diagnostics for simulations: LDAG10_2\n", file = filename, append = F)
