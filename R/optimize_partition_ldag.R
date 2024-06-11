@@ -58,7 +58,12 @@ optimize_partition_ldag <- function(counts, levels, ess,
     # apply(rows, 1, function(x) cbind(conf[x, ], p = partition[x]), simplify = F)
     
     # find labels that implies no new independencies
-    redundant_labels <- rowSums(parts == parts[, 1]) == ncol(parts)
+    if (nlev[i] == 2) {
+      redundant_labels <- parts[, 1] == parts[, 2]
+    } else {
+      redundant_labels <- rowSums(parts[, -1] == parts[, 1]) == nlev[i]-1
+    }
+   
     
     # add redundant labels to current set of labels
     if (any(redundant_labels)) {
@@ -75,11 +80,11 @@ optimize_partition_ldag <- function(counts, levels, ess,
     
    
     # find labels that implies the same independencies
-    dups <- find_duplicated_rows(parts)
-    #parts <- lapply(parts, sort)
-    #dups  <- duplicated(parts)
-    
-    for (j in seq_along(contexts)[!dups]) {
+    # - evaluate only the first as candidate context
+    # - add redudant labels in next call to the function
+   # dups  <- duplicated(lapply(split(parts, .row(dim(parts))), tabulate)) 
+   
+    for (j in seq_along(contexts)) {
       
       collapse <- parts[j, ]
       
@@ -95,29 +100,9 @@ optimize_partition_ldag <- function(counts, levels, ess,
         PP <- c(P[-collapse], list(unlist(P[collapse])))
         if (!is_regular(PP,  nlev, stride))  next 
         
-        if (any(dups)) {
-          # find all labels implied by collapsing the two parts
-          # candidates <- which(dups)[rowSums(parts[dups,, drop = F]) == sum(collapse)]
-          # matches <- vector("logical", length(candidates))
-          # for (jj in candidates) {
-          #   matches[j] <- all(match(parts[jj, ], collapse, 0L) > 0)
-          # } 
-          
-          matches <- apply(parts, 1, 
-                           function(x) all(match(x, collapse, 0L) > 0))
-          if (!(length(labels[[i]]) + sum(matches) < q/nlev[i])) {
-            next 
-          } else {
-            #context <- contexts[c(j, candidates[matches])]
-            context <- contexts[matches]
-          }
-        } else {
-          context <- contexts[j]
-        }
-        
         best_partition <- PP
         best_diff <- diff
-        best_lab  <- list(node = i, context = context, parts = collapse)
+        best_lab  <- list(node = i, context = contexts[j], parts = collapse)
         keep_climb <- TRUE
       }
     }
@@ -150,25 +135,11 @@ optimize_partition_ldag <- function(counts, levels, ess,
 }
 
 
-find_duplicated_rows <- function(x){
-  n <- nrow(x)
-  dups <- vector("logical", n)
-  sums <- rowSums(x)
-  if (anyDuplicated(sums) == 0) return(dups)
-  seqn <- seq_len(n)
-  for (i in seqn[-n]) {
-    if (!dups[i]) {
-      tab <- x[i, ]
-      candidates <- seqn[replace((!dups & (sums == sums[i])), i, FALSE)]
-      for (j in candidates) {
-        dups[j] <- all(match(x[j, ], tab, 0L) > 0)
-      }
-    }
-  }
-  return(dups)
+find_duplicated_rows <- function(x) {
+  rsums <- rowSums(x)
+  dups  <- duplicated(rsums)
+  
 }
-
-
 # profiling ----
 if (FALSE) {
   
@@ -187,33 +158,6 @@ if (FALSE) {
                                  all_elem_equal2(tmp),
                                  all_elem_equal3(m))
 
-  find_duplicated_rows <- function(x){
-    n <- nrow(x)
-    dups <- vector("logical", n)
-    seqn <- seq_len(n)
-    sums <- rowSums(x)
-    
-    for (i in seqn[-n]) {
-      if (!dups[i]) {
-        tab <- x[i, ]
-        candidates <- seqn[replace((!dups & (sums == sums[i])), i, FALSE)]
-        for (j in candidates) {
-          dups[j] <- all(match(x[j, ], tab, 0L) > 0)
-        }
-      }
-    }
-    return(dups)
-  }
-  
-  find_duplicated_rows2 <- function(x) {
-    tmp <- lapply(asplit(x, 1), sort)
-    duplicated(tmp)
-  }
-  
-  
-  tmp <- replicate(5, sample(1:10, 3, T), simplify = F)
-  m <- do.call(rbind, tmp) 
-  microbenchmark::microbenchmark(find_duplicated_rows(m),
-                                 find_duplicated_rows2(m))
+
 }
 
