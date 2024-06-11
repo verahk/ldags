@@ -18,7 +18,7 @@
 #'
 #' @examples
 #' levels <- list(0:1, 0:2, 0:3)
-#' label <- vector("list", length(nlev))
+#' label <- vector("list", length(levels))
 #' label[[1]] <- rbind(c(NA, 0), c(0, 1))
 #' part1 <- labels_to_partition(label, levels, type = "outcome_vectors")
 #' 
@@ -66,7 +66,7 @@ labels_to_partition <- function(labels, levels, nlev = lengths(levels), type = "
     }
   }
    
-  unname(split(seq_along(part)-1, part))
+  unname(split(seq_along(parts)-1, parts))
 }
 
 

@@ -29,7 +29,7 @@ make_regular <- function(P, nlev) {
     stride <- c(1, cumprod(nlev[-length(nlev)]))
     new_P <- P 
     for (i in seq_along(nlev)) {
-      if (is_regular_varwise(P, nlev, stride, i)) {
+      if (is_regular_varwise(P, nlev[i], stride[i])) {
         tmp   <- lapply(new_P, function(p) split(p, (p%/%stride[i])%%nlev[i]))
         new_P <- unlist(tmp, recursive = F, use.names = FALSE)
       }

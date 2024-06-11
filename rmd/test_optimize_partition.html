@@ -364,22 +364,24 @@ display: none;
 
 
 <pre class="r"><code>library(pcalg) # for as(adjmat, &quot;graphNEL&quot;)
+library(ldags)
 here::i_am(&quot;./rmd/test_optimize_partition.Rmd&quot;)</code></pre>
 <pre><code>## here() starts at C:/Users/verak/OneDrive - Universitetet i Oslo/Documents/git/personal/ldags</code></pre>
-<pre class="r"><code>sapply(list.files(here::here(&quot;./R/&quot;), &quot;.R&quot;, full.names = T), source, echo = F)</code></pre>
 <div id="test-optmization-routines" class="section level2">
 <h2>Test optmization routines</h2>
 <p>Write a routine that, for a given frequency table, compares the
 partitions and local scores resulting from each optimization routine
 <code>methods = c(&quot;tree&quot;, &quot;ldag&quot;, &quot;part&quot;)</code>.</p>
-<pre class="r"><code>tester &lt;- function(counts, levels, methods = c(&quot;tree&quot;, &quot;ldag&quot;, &quot;part&quot;)) {
+<pre class="r"><code>tester &lt;- function(counts, levels, methods = c(&quot;tree&quot;, &quot;ldag&quot;, &quot;part&quot;), regular = F) {
   df &lt;- cbind(expand.grid(levels), n = counts)
   scores &lt;- setNames(numeric(length(methods)), methods)
   for (method in methods) {
-    res &lt;- ldags:::optimize_partition(counts, levels, ess = 1, method, make_regular = F)
-    df[[method]] &lt;- ldags:::unlist_partition(res$partition)
+    res &lt;- ldags:::optimize_partition(counts, levels, ess = 1, method, regular = regular)
+    df[[method]] &lt;- get_parts(res$partition)
     scores[method] &lt;- sum(res$scores)
   }
+  df[[&quot;none&quot;]] &lt;- seq_len(nrow(counts))
+  scores[&quot;none&quot;] &lt;- sum(compute_local_bdeu_score(counts, 1, ncol(counts), nrow(counts), s = 1))
   return(list(df, scores))
 }</code></pre>
 <div id="binary-split" class="section level3">
@@ -391,15 +393,15 @@ variable:</p>
 counts &lt;- cbind(10, c(10, 10, 100, 100))
 tester(counts, levels)</code></pre>
 <pre><code>## [[1]]
-##   Var1 Var2 n.1 n.2 tree ldag part
-## 1    0    0  10  10    1    1    1
-## 2    1    0  10  10    1    2    2
-## 3    0    1  10 100    2    3    3
-## 4    1    1  10 100    2    3    3
+##   Var1 Var2 n.1 n.2 tree ldag part none
+## 1    0    0  10  10    1    1    1    1
+## 2    1    0  10  10    1    2    2    2
+## 3    0    1  10 100    2    3    3    3
+## 4    1    1  10 100    2    3    3    4
 ## 
 ## [[2]]
-##      tree      ldag      part 
-## -100.4871 -103.5120 -103.5120</code></pre>
+##      tree      ldag      part      none 
+## -100.4871 -103.5120 -103.5120 -106.8413</code></pre>
 </div>
 <div id="v-structure" class="section level3">
 <h3>V-structure</h3>
@@ -409,360 +411,228 @@ v-structure with labels on both parents.</p>
 counts &lt;- cbind(10, c(10, 100, 100, 100))
 tester(counts, levels)</code></pre>
 <pre><code>## [[1]]
-##   Var1 Var2 n.1 n.2 tree ldag part
-## 1    0    0  10  10    1    1    1
-## 2    1    0  10 100    1    2    2
-## 3    0    1  10 100    1    2    2
-## 4    1    1  10 100    1    2    2
+##   Var1 Var2 n.1 n.2 tree ldag part none
+## 1    0    0  10  10    1    1    1    1
+## 2    1    0  10 100    1    2    2    2
+## 3    0    1  10 100    1    2    2    3
+## 4    1    1  10 100    1    2    2    4
 ## 
 ## [[2]]
-##      tree      ldag      part 
-## -127.5402 -120.3896 -120.3896</code></pre>
+##      tree      ldag      part      none 
+## -118.0866 -120.3896 -120.3896 -126.9286</code></pre>
 <p>The <code>tree</code>-partition returns only one region, i.e. the
 no-parent CPT, as the score is not improved by splitting on any of the
 parent variables for the given frequency table.</p>
 <pre class="r"><code>cat(&quot;Score, P(Y|X1, X2):&quot;)
-sum(famscore_bdeu_byrow(counts, ess = 1, r = 2, q = 4, s = 1))
+compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1)
 cat(&quot;Score, P(Y|X2):&quot;)
-sum(famscore_bdeu_byrow(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat(&quot;Score P(Y):&quot;)
-famscore_bdeu_byrow(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
+compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
 <pre><code>## Score, P(Y|X1, X2):[1] -126.9286
 ## Score, P(Y|X2):[1] -128.9997
 ## Score P(Y):[1] -127.5402</code></pre>
+<p>The <code>make_regular</code> option of the
+<code>optimize_partition</code> function forces a partition that do not
+implicitly encode any conditional independencies.</p>
+<pre class="r"><code>tester(counts, levels, regular = T)</code></pre>
+<pre><code>## [[1]]
+##   Var1 Var2 n.1 n.2 tree ldag part none
+## 1    0    0  10  10    1    1    1    1
+## 2    1    0  10 100    1    2    2    2
+## 3    0    1  10 100    1    2    2    3
+## 4    1    1  10 100    1    2    2    4
+## 
+## [[2]]
+##      tree      ldag      part      none 
+## -118.0866 -120.3896 -120.3896 -126.9286</code></pre>
 <p>In the following example, also the <code>tree</code> procedure
 captures the correct local structure.</p>
 <pre class="r"><code>levels &lt;- rep(list(0:1), 2)
 counts &lt;- cbind(c(100, 10, 10, 10), c(10, 100, 100, 100))
 tester(counts, levels)</code></pre>
 <pre><code>## [[1]]
-##   Var1 Var2 n.1 n.2 tree ldag part
-## 1    0    0 100  10    1    1    1
-## 2    1    0  10 100    3    2    2
-## 3    0    1  10 100    2    2    2
-## 4    1    1  10 100    3    2    2
+##   Var1 Var2 n.1 n.2 tree ldag part none
+## 1    0    0 100  10    1    1    1    1
+## 2    1    0  10 100    3    2    2    2
+## 3    0    1  10 100    2    2    2    3
+## 4    1    1  10 100    3    2    2    4
 ## 
 ## [[2]]
-##      tree      ldag      part 
-## -143.6865 -140.4769 -140.4769</code></pre>
+##      tree      ldag      part      none 
+## -143.6865 -140.4769 -140.4769 -147.0158</code></pre>
 <pre class="r"><code>cat(&quot;Score, P(Y|X1, X2):&quot;)
-sum(famscore_bdeu_byrow(counts, ess = 1, r = 2, q = 4, s = 1))
+sum(compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1))
 cat(&quot;Score, P(Y|X2):&quot;)
-sum(famscore_bdeu_byrow(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+sum(compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
 cat(&quot;Score P(Y):&quot;)
-famscore_bdeu_byrow(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
+compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
 <pre><code>## Score, P(Y|X1, X2):[1] -147.0158
 ## Score, P(Y|X2):[1] -226.106
 ## Score P(Y):[1] -270.3338</code></pre>
 </div>
 </div>
-<div id="test-score-table" class="section level1">
-<h1>Test score table</h1>
-<p>Test the <code>score_from_lookup</code> function. For a given node
-<code>j</code> and parent set <code>parentnodes</code> this function
-search in a <code>rlang::env</code> list-object <code>lookup</code> for
-the score. If the score is not already computed, it is computed and
-added to <code>lookup</code>.</p>
-<pre class="r"><code>n &lt;- 5
-levels &lt;- rep(list(0:1), n)
-data &lt;- sapply(levels, sample, size = 100, replace = T)
-tab &lt;- ldags:::init_lookup_scoretable(n, list(ess = 1))
-
-cat(&quot;\nEmpty parent set (no CPT-partition-optimization):&quot;)
-j &lt;- 1
-parentnodes &lt;- vector(&quot;integer&quot;)
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = &quot;tree&quot;, lookup = tab)
-ls.str(tab)</code></pre>
-<pre><code>## 
-## Empty parent set (no CPT-partition-optimization):[1] -70.21679
-## counts : List of 5
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-## params : List of 1
-##  $ ess: num 1
-## scores : List of 5
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()</code></pre>
-<pre class="r"><code>cat(&quot;\nOne parent (no CPT-partition-optimization):&quot;)
-j &lt;- 1
-parentnodes &lt;- 2
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = &quot;tree&quot;, lookup = tab)
-ls.str(tab)</code></pre>
-<pre><code>## 
-## One parent (no CPT-partition-optimization):[1] -71.30479
-## counts : List of 5
-##  $ :List of 1
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-## params : List of 1
-##  $ ess: num 1
-## scores : List of 5
-##  $ :List of 1
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()</code></pre>
-<pre class="r"><code>cat(&quot;\nMultiple parents:&quot;)
-j &lt;- 1
-parentnodes &lt;- 2:5
-ldags:::score_from_lookup(data, levels, lengths(levels), j, parentnodes, method = &quot;tree&quot;, lookup = tab)
-ls.str(tab)</code></pre>
-<pre><code>## 
-## Multiple parents:[1] -105.1277
-## counts : List of 5
-##  $ :List of 2
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-## params : List of 1
-##  $ ess: num 1
-## scores : List of 5
-##  $ :List of 1
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-## tree : List of 1
-##  $ :List of 1</code></pre>
-</div>
-<div id="score-equivalence" class="section level1">
-<h1>Score equivalence</h1>
-<pre class="r"><code>n &lt;- 3
-levels &lt;- rep(list(0:1), n)
-data &lt;- replicate(n, sample(0:1, 100, T))</code></pre>
-<pre class="r"><code>dag &lt;- matrix(0, n, n)
-dag[upper.tri(dag)] &lt;- 1
-colnames(dag) &lt;- rownames(dag) &lt;- c(&quot;Z&quot;, &quot;X&quot;, &quot;Y&quot;)
-labels &lt;- list(NULL, NULL, list(NULL, 0))
-cpts &lt;- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
-for (i in 1:n) {
-  cpts[[i]]$counts &lt;- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  &lt;- compute_local_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, &quot;[[&quot;, &quot;score&quot;))
-  
-dag[&quot;X&quot;, &quot;Y&quot;] &lt;- 0
-dag[&quot;Y&quot;, &quot;X&quot;] &lt;- 1
-labels &lt;- list(NULL, list(NULL, 0), NULL)
-cpts &lt;- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
-for (i in 1:n) {
-  cpts[[i]]$counts &lt;- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  &lt;- compute_local_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, &quot;[[&quot;, &quot;score&quot;))
-
-dag[&quot;Y&quot;, &quot;X&quot;] &lt;- 0
-labels &lt;- NULL
-cpts &lt;- lapply(1:n,function(i) cpt_from_dag(dag, levels, labels, i))
-for (i in 1:n) {
-  cpts[[i]]$counts &lt;- compute_freq_table_from_cpt(cpts[[i]], data)
-  cpts[[i]]$score  &lt;- compute_local_score_from_cpt(cpts[[i]], ess = 1)
-}
-sum(sapply(cpts, &quot;[[&quot;, &quot;score&quot;))</code></pre>
-<pre><code>## [1] -143.0502
-## [1] -143.0502
-## [1] -77.88876</code></pre>
-</div>
-<div id="test-bidag" class="section level1">
-<h1>Test BiDAG</h1>
-<pre class="r"><code>dag &lt;- rbind(L  = c(0, 1, 1, 0, 1),
-             Z1 = c(0, 0, 0, 1, 0),
-             Z2 = c(0, 0, 0, 1, 0),
-             X  = c(0, 0, 0, 0, 1),
-             Y  = rep(0, 5))
-colnames(dag) &lt;- rownames(dag)
-n &lt;- ncol(dag)
-levels &lt;- rep(list(0:1), n)
+<div id="compare-optimized-partitions-and-search-through-labels-routine-coincide" class="section level1">
+<h1>Compare optimized partitions and search-through-labels routine
+coincide</h1>
+<pre class="r"><code>levels &lt;- rep(list(0:1), 3)
 nlev &lt;- lengths(levels)
+ess &lt;- 1
 
-labmat &lt;- matrix(list(), n, n)
-labmat[[2, 4]] &lt;- rbind(0)  # Z1 -&gt; X
-labmat[[3, 4]] &lt;- rbind(0)  # Z2 -&gt; X
-labmat[[4, 5]] &lt;- rbind(0)  # X -&gt; Y
+for (i in 1:100) {
+  #cat(&quot;\niter:&quot;, i, &quot;\n&quot;)
+  counts &lt;- matrix(rgamma(2**(3+1), shape = 1), ncol = 2)
+  fits &lt;- list()
 
-# plot
-g &lt;- as(dag, &quot;graphNEL&quot;)
-indx &lt;- sapply(labmat[dag == 1], is.null)
-prettify_lab &lt;- function(x, from, to) {
+  fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = F, F)
+  fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = F, F)
 
-}
-
-lab &lt;- c()
-for (i in seq_len(ncol(dag))) {
-  for (j in seq_len(ncol(dag))) {
-    if (is.null(labmat[[i, j]])) next
-    tmp &lt;- apply(labmat[[i, j]], 1, function(y) sprintf(&quot;(%s)&quot;,  paste(y, collapse = &quot;,&quot;)))
-    tmp &lt;- sprintf(&quot;{%s}&quot;, paste(gsub(&quot;NA&quot;, &quot;*&quot;, tmp), collapse = &quot;,&quot;))
-    names(tmp) &lt;- sprintf(&quot;%s~%s&quot;, colnames(dag)[i], colnames(dag)[j])
-    lab  &lt;- append(lab, tmp)
-  }
-}
-fonts &lt;- rep(10, length(lab))
-names(fonts) &lt;- names(lab)
-Rgraphviz::plot(g, edgeAttrs = list(label = lab, fontsize = fonts))</code></pre>
-<p><img src="data:image/png;base64,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" width="672" /></p>
-<p>Draw a distribution over the labeled DAG:</p>
-<pre class="r"><code>set.seed(007)
-partitions &lt;- vector(&quot;list&quot;, ncol(dag))
-for (i in 1:ncol(dag)) {
-  pa   &lt;- which(dag[, i] == 1)
-  if (length(pa) &gt; 1) {
-     labs &lt;- labmat[pa, i]
-     if (any(lengths(labs) &gt; 0)) {
-       partitions[[i]] &lt;- labels_to_partition(labs, levels[pa], enumerate = T)
-     }
-  }
-}
-nlev &lt;- rep(2, ncol(dag))
-bn &lt;- rand_bn(dag, partitions, nlev, alpha = 1)
-bn</code></pre>
-<pre><code>## 
-##   Bayesian network parameters
-## 
-##   Parameters of node L (multinomial distribution)
-## 
-## Conditional probability table:
-##  L
-##         A         B 
-## 0.9889093 0.0110907 
-## 
-##   Parameters of node Z1 (multinomial distribution)
-## 
-## Conditional probability table:
-##  
-##    L
-## Z1          A         B
-##   A 0.3977455 0.1156978
-##   B 0.6022545 0.8843022
-## 
-##   Parameters of node Z2 (multinomial distribution)
-## 
-## Conditional probability table:
-##  
-##    L
-## Z2           A          B
-##   A 0.06974868 0.24374939
-##   B 0.93025132 0.75625061
-## 
-##   Parameters of node X (multinomial distribution)
-## 
-## Conditional probability table:
-##  
-## , , Z2 = A
-## 
-##    Z1
-## X           A         B
-##   A 0.7920104 0.7920104
-##   B 0.2079896 0.2079896
-## 
-## , , Z2 = B
-## 
-##    Z1
-## X           A         B
-##   A 0.7920104 0.3400624
-##   B 0.2079896 0.6599376
-## 
-## 
-##   Parameters of node Y (multinomial distribution)
-## 
-## Conditional probability table:
-##  
-## , , X = A
-## 
-##    L
-## Y           A         B
-##   A 0.9720625 0.1658555
-##   B 0.0279375 0.8341445
-## 
-## , , X = B
-## 
-##    L
-## Y           A         B
-##   A 0.9720625 0.4591037
-##   B 0.0279375 0.5408963</code></pre>
-<pre class="r"><code>library(BiDAG)
-data &lt;- bida:::sample_data_from_bn(bn, 1000)
-scorepar &lt;- scoreparameters(&quot;usr&quot;, 
-                             data = data,
-                             usrpar = list(pctesttype = &quot;bdecat&quot;))
-
-scorepar$Cvec &lt;- nlev
-scorepar$levels &lt;- lapply(scorepar$Cvec-1, seq.int, from = 0)
-scorepar$lookup  &lt;- init_lookup_scoretable(n, list(ess = 1))
-ls.str(scorepar$lookup)
-
-# wrapper function
-usrDAGcorescore &lt;- function(j, parentnodes, n, scorepar) {
-  score_from_lookup(scorepar$data, 
-                    levels = scorepar$levels, 
-                    nlev = scorepar$Cvec, 
-                    j, 
-                    parentnodes, 
-                    method = scorepar$optPartMethod, 
-                    lookup = scorepar$lookup)
-}
-
-# assign to namespace
-assignInNamespace(&quot;usrDAGcorescore&quot;, usrDAGcorescore, ns = &quot;BiDAG&quot;)</code></pre>
-<pre><code>## counts : List of 5
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-## params : List of 1
-##  $ ess: num 1
-## scores : List of 5
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()
-##  $ : list()</code></pre>
-<pre class="r"><code>for (optPartMethod in c(&quot;tree&quot;, &quot;ldag&quot;, &quot;part&quot;)){
-  scorepar$optPartMethod &lt;- optPartMethod
-  scorepar$tab[[optPartMethod]] &lt;- rep(list(list()), ncol(dag))
-  print(usrDAGcorescore(1, integer(0), ncol(dag), scorepar))
-  print(usrDAGcorescore(1, 2, ncol(dag), scorepar))
-  print(usrDAGcorescore(1, 2:3, ncol(dag), scorepar))
-}</code></pre>
-<pre><code>## [1] -59.68549
-## [1] -59.67192
-## [1] -62.18994
-## [1] -59.68549
-## [1] -59.67192
-## [1] -60.0601
-## [1] -59.68549
-## [1] -59.67192
-## [1] -60.0601</code></pre>
-<pre class="r"><code>res &lt;- list()
-for (optPartMethod in c(&quot;ldag&quot;, &quot;tree&quot;)) {
-  cat(&quot;\n&quot;, optPartMethod, &quot;\n&quot;)
-  scorepar$optPartMethod &lt;- optPartMethod
-  scorepar$lookup[[optPartMethod]] &lt;- rep(list(list()), ncol(dag))
-  res[[optPartMethod]] &lt;- sampleBN(scorepar, algo = &quot;orderIter&quot;, verbose = T, hardlimit = 3)
+  partitions &lt;- sapply(lapply(fits, &quot;[[&quot;, &quot;partition&quot;), get_parts)
   
-  #tryCatch(sampleBN(scorepar, algo = &quot;orderIter&quot;, verbose = T, hardlimit = 3), 
-  #         warning = function(cond) stop())
+  
+  # stop and print output if part and ldag do not coincide
+  if (!all(partitions[, &quot;part&quot;] == partitions[, &quot;ldag&quot;])) {
+    cbind(expand.grid(levels), partitions)
+    
+    cat(&quot;\npart:&quot;)
+    fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = F, T)
+    cat(&quot;\nldag:&quot;)
+    fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = F, T)
+    
+    is_CSI_consistent(fits$part$partition, nlev)
+    is_regular(fits$part$partition, nlev)
+    
+    is_CSI_consistent(fits$ldag$partition, nlev)
+    is_regular(fits$ldag$partition, nlev)
+    break
+  }
 }</code></pre>
+<pre class="r"><code>bn   &lt;- readRDS(here::here(&quot;./data/LDAG10.rds&quot;))
+dag  &lt;- bnlearn::amat(bn)
+nlev &lt;- rep(2, 10)  
+levels &lt;- lapply(nlev-1, seq.int, from = 0)
+
+bn &lt;- ldags:::example_bn(&quot;LDAG10&quot;)
+data &lt;- bida:::sample_data_from_bn(bn, 10**6)
+
+for (i in seq_along(bn)) {
+  par &lt;- which(dag[, i] == 1)
+  if (length(par) &lt; 2) next 
+  
+  parts  &lt;- list()
+  cpt &lt;- aperm(bn[[i]]$prob, c(seq_along(par)+1, 1))
+  dim(cpt) &lt;- c(prod(nlev[par]), nlev[i]) 
+  parts$true &lt;- match(cpt[, 1], cpt[, 1]) 
+  
+  counts &lt;- compute_freq_table(data, nlev, i, par)
+  fit    &lt;- optimize_partition(counts, levels[par], 1, &quot;tree&quot;, verbose = F)
+  parts$tree  &lt;- get_parts(fit$partition)
+  
+  fit    &lt;- optimize_partition(counts, levels[par], 1, &quot;ldag&quot;, verbose = F)
+  parts$ldag  &lt;- get_parts(fit$partition)
+  
+  cat(&quot;\nVariable:&quot;, i, 
+      &quot;True length:&quot;, length(unique(parts$true)), 
+      &quot;True partition:&quot;, parts$true, &quot;\n&quot;)
+  tabs &lt;- lapply(parts[-1], function(x) table(parts$true, x))
+  print(lapply(tabs, function(x) colSums(x &gt; 0)))
+  
+  #print(data.frame(cpt[, 1], counts, parts))
+}            </code></pre>
 <pre><code>## 
-##  ldag 
-## maximum parent set size is 2 
-## core space defined, score table are being computed 
-## score tables completed, iterative MCMC is running 
+## Variable: 3 True length: 3 True partition: 1 2 1 4 
+## $tree
+## 1 2 3 
+## 1 1 2 
 ## 
-##  tree 
-## maximum parent set size is 2 
-## core space defined, score table are being computed 
-## score tables completed, iterative MCMC is running</code></pre>
+## $ldag
+## 1 2 
+## 1 2 
+## 
+## 
+## Variable: 4 True length: 3 True partition: 1 2 3 3 
+## $tree
+## 1 2 3 
+## 1 1 1 
+## 
+## $ldag
+## 1 2 3 
+## 1 1 1 
+## 
+## 
+## Variable: 5 True length: 5 True partition: 1 2 1 4 1 6 1 8 
+## $tree
+## 1 2 3 4 5 
+## 1 1 1 1 1 
+## 
+## $ldag
+## 1 2 3 4 5 
+## 1 1 1 1 1 
+## 
+## 
+## Variable: 7 True length: 9 True partition: 1 2 3 4 5 6 4 4 9 4 11 4 13 4 13 4 
+## $tree
+##  1  2  3  4  5  6  7  8  9 10 11 12 
+##  1  1  1  1  1  1  2  1  1  1  1  1 
+## 
+## $ldag
+## 1 2 3 4 5 6 7 8 
+## 1 1 1 1 1 1 1 2 
+## 
+## 
+## Variable: 8 True length: 4 True partition: 1 2 3 4 
+## $tree
+## 1 2 3 4 
+## 1 1 1 1 
+## 
+## $ldag
+## 1 2 3 4 
+## 1 1 1 1 
+## 
+## 
+## Variable: 9 True length: 3 True partition: 1 2 3 3 
+## $tree
+## 1 2 3 
+## 1 1 1 
+## 
+## $ldag
+## 1 2 3 
+## 1 1 1 
+## 
+## 
+## Variable: 10 True length: 9 True partition: 1 2 3 2 5 2 7 2 9 2 11 2 13 2 15 2 
+## $tree
+## 1 2 3 4 5 6 7 8 9 
+## 1 1 1 1 1 1 1 1 1 
+## 
+## $ldag
+## 1 2 3 4 5 6 7 8 
+## 1 1 1 1 1 1 2 1</code></pre>
+<pre class="r"><code>i &lt;- 3
+par &lt;- which(dag[, i] == 1)
+counts &lt;- compute_freq_table(data, nlev, i, par)
+microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, &quot;part&quot;),
+                               optimize_partition(counts, levels[par], 1, &quot;ldag&quot;))
+
+i &lt;- 10
+par &lt;- which(dag[, i] == 1)
+counts &lt;- compute_freq_table(data, nlev, i, par)
+microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, &quot;part&quot;),
+                               optimize_partition(counts, levels[par], 1, &quot;ldag&quot;))</code></pre>
+<pre><code>## Unit: microseconds
+##                                                expr   min    lq    mean median
+##  optimize_partition(counts, levels[par], 1, &quot;part&quot;) 322.5 335.0 360.402 341.40
+##  optimize_partition(counts, levels[par], 1, &quot;ldag&quot;) 574.6 589.1 654.399 605.25
+##      uq    max neval cld
+##  358.50  694.2   100  a 
+##  646.35 3493.7   100   b
+## Unit: milliseconds
+##                                                expr    min      lq     mean
+##  optimize_partition(counts, levels[par], 1, &quot;part&quot;) 4.8757 4.99630 5.357428
+##  optimize_partition(counts, levels[par], 1, &quot;ldag&quot;) 4.7400 4.86175 5.045578
+##   median      uq   max neval cld
+##  5.08535 5.18345 9.404   100  a 
+##  4.95540 5.03725 8.596   100   b</code></pre>
 </div>
 
 

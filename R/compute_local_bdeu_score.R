@@ -30,7 +30,7 @@ compute_local_bdeu_score_from_cpt <- function(cpt, ess = 1) {
 compute_local_bdeu_score_from_data <- function(data, levels, nlev = lengths(levels), j, parentnodes, ess, struct = NULL, regular = FALSE, lookup = NULL) {
   counts <- compute_freq_table(data, nlev, j, parentnodes, lookup = NULL)
   if (length(parentnodes) > 1 && !is.null(struct)) {
-    struct <- optimize_partition(counts, levels[parentnodes], ess, method = struct, make_regular = regular)
+    struct <- optimize_partition(counts, levels[parentnodes], ess, method = struct, regular = regular)
     score  <- sum(struct$scores)
     attr(score, "structure") <- struct
     return(score)

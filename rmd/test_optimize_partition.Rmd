@@ -23,12 +23,12 @@ tester <- function(counts, levels, methods = c("tree", "ldag", "part"), regular 
   df <- cbind(expand.grid(levels), n = counts)
   scores <- setNames(numeric(length(methods)), methods)
   for (method in methods) {
-    res <- optimize_partition(counts, levels, ess = 1, method, regular = regular)
+    res <- ldags:::optimize_partition(counts, levels, ess = 1, method, regular = regular)
     df[[method]] <- get_parts(res$partition)
     scores[method] <- sum(res$scores)
   }
   df[["none"]] <- seq_len(nrow(counts))
-  scores["none"] <- sum(compute_local_bdeu_score(counts, 1))
+  scores["none"] <- sum(compute_local_bdeu_score(counts, 1, ncol(counts), nrow(counts), s = 1))
   return(list(df, scores))
 }
 ```
@@ -72,11 +72,11 @@ tester(counts, levels)
 
 ```{r}
 cat("Score, P(Y|X1, X2):")
-sum(famscore_bdeu_byrow(counts, ess = 1, r = 2, q = 4, s = 1))
+sum(compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1))
 cat("Score, P(Y|X2):")
-sum(famscore_bdeu_byrow(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+sum(compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
 cat("Score P(Y):")
-famscore_bdeu_byrow(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
+compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
 ```
 
 
@@ -127,7 +127,7 @@ dag  <- bnlearn::amat(bn)
 nlev <- rep(2, 10)  
 levels <- lapply(nlev-1, seq.int, from = 0)
 
-bn <- example_bn("LDAG10")
+bn <- ldags:::example_bn("LDAG10")
 data <- bida:::sample_data_from_bn(bn, 10**6)
 
 for (i in seq_along(bn)) {

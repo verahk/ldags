@@ -8,12 +8,8 @@ library(foreach)
 library(BiDAG)
 library(ldags)
 
-source("./simulations/LDAG10_2/R/define_scorepar.R")
-source("./simulations/LDAG10_2/R/init_search_space.R")
-source("./simulations/LDAG10_2/R/sample_dags.R")
-
 simpar <- expand.grid(list(bnname = c("LDAG10"), 
-                           init = c("pcskel", "hc"),
+                           init = c("pcskel"),
                            struct = c("ldag", "dag", "tree"),
                            sample = "partition", 
                            edgepf = c(1, 2, 10**3),
@@ -42,10 +38,10 @@ run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_fi
   nlev <- sapply(bn, function(x) dim(x$prob)[1])
   
   # define scorepars
-  scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = struct)
+  scorepar <- ldags:::define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = struct)
   
   # run MCMC
-  smpl <- sample_dags(scorepar, init, sample, hardlimit = 4, verbose = verbose)
+  smpl <- ldags:::sample_dags(scorepar, init, sample, hardlimit = 4, verbose = verbose)
   
   if (write_to_file) {
     saveRDS(smpl, filepath)
@@ -59,7 +55,8 @@ run <- function(bnname, init, struct, sample, edgepf, regular, N, r, write_to_fi
 # test 
 if (FALSE) {
   bnname <- "LDAG10"
-  test <- run(bnname, init = "hcskel", struct = "tree", sample = "partition",  edgepf = 1, regular = FALSE, N = 1000, r = 1, write_to_file = F)
+  test <- run(bnname, init = "hcskel", struct = "tree", sample = "partition",  
+              edgepf = 1, regular = FALSE, N = 1000, r = 1, write_to_file = F, verbose = T)
 }
 
 # run ---- 
@@ -86,7 +83,8 @@ foreach(r = 1:nrow(simpar)) %dopar% run(simpar$bnname[r],
                                         simpar$regular[r],
                                         simpar$N[r],
                                         simpar$r[r],
-                                        write_to_file = T)
+                                        write_to_file = T,
+                                        verbose = T)
 stopCluster(cl)
 
 

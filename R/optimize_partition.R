@@ -30,9 +30,9 @@ optimize_partition <- function(counts, levels, ess, method, regular = F, verbose
   if (regular) {
     # ensure that partition is regular
     new_P <- make_regular(res$partition, lengths(levels))
-    if (!length(tmp) == length(res$partition)) {
+    if (!length(new_P) == length(res$partition)) {
       new_counts <- rowsum(counts, get_parts(new_P))
-      mew_scores <- famscore_bdeu_byrow(new_counts, ess, 
+      new_scores <- famscore_bdeu_byrow(new_counts, ess, 
                                         r = ncol(counts), q = nrow(counts), s = lengths(new_P))
       res$partition <- new_P
       res$counts <- new_counts

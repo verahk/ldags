@@ -1,5 +1,17 @@
 
 
+#' Title
+#'
+#' @param data 
+#' @param nlev 
+#' @param j 
+#' @param parentnodes 
+#' @param lookup 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 compute_freq_table <- function(data, nlev, j, parentnodes, lookup = NULL) {
   
   npar <- length(parentnodes)
