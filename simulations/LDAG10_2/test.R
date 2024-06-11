@@ -1,4 +1,6 @@
 
+library(ggplot2)
+
 bnname <- "LDAG10"
 bn <- readRDS(paste0("./data/", bnname, ".rds"))
 dag <- bnlearn::amat(bn)
