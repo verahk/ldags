@@ -7,7 +7,7 @@
 #' # ldag
 #' levels <- list(0:1, 0:1)
 #' counts <- cbind(c(10, 20, 30, 40), rep(10, 4))
-#' optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
+#' optimize_partition_ldag(counts, levels, ess = 1, regular = T, verbose = T)
 #' 
 #' # mixed cardinality
 #' levels <- list(0:1, 0:2)
@@ -125,7 +125,9 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
                              paste(get_parts(P), collapse = " ")))
    
     
-    return(optimize_partition_ldag(counts, levels, ess, P, labels, conf, verbose))
+    return(optimize_partition_ldag(counts, levels, ess, 
+                                   regular, min_score_improv, 
+                                   P, labels, conf, verbose))
     
   } else {
     return(list(partition = P,

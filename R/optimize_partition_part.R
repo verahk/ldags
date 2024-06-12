@@ -16,8 +16,8 @@
 #' levels <- list(0:1, 0:1)
 #' counts <- cbind(c(10, 100, 100, 100), rep(10, 4))
 #' optimize_partition_part(counts, levels, ess = 1, verbose = T)
-optimize_partition_part <- function(counts, levels,  ess, regular, 
-                                    min_score_improv = 0,
+optimize_partition_part <- function(counts, levels,  ess, 
+                                    regular, min_score_improv = 0,
                                     P = as.list(1:nrow(counts)-1), 
                                     ldag_consistent = T, 
                                     verbose = FALSE){
@@ -32,7 +32,7 @@ optimize_partition_part <- function(counts, levels,  ess, regular,
   
   # find the two current parts that increase the score most if collapsed
   keep_climb <- FALSE
-  if (length(P) > 2) {
+  if (length(P) > 1) {
     best_diff <- min_score_improv
     nlev <- lengths(levels)
     stopifnot(all(nlev == 2))
@@ -78,7 +78,8 @@ optimize_partition_part <- function(counts, levels,  ess, regular,
                              paste(best_parts, collapse = ","),
                              paste(get_parts(best_partition), collapse = " ")))
     
-    optimize_partition_part(counts, levels,  ess, best_partition,  lkappa, ldag_consistent, verbose)
+    optimize_partition_part(counts, levels,  ess, regular, min_score_improv = 0,
+                            best_partition, ldag_consistent, verbose)
   } else {
     return(list(partition = P, counts = part_counts, scores = part_scores))
   }

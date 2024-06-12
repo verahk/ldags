@@ -1,8 +1,8 @@
 test_that("user-defined score gives same result as optimization routine", {
   
-  data <- replicate(3, 0:1)
-  nlev <- rep(2, 3)
-  levels <- lapply(nlev-1, seq.int, from = 0)
+  levels <- rep(list(0:1), 3)
+  nlev <- lengths(levels)
+  data <- sapply(levels, sample, size = 10, replace = T)
   j <- 1
   pa <- 2:3 
   lookup <- rlang:::new_environment()
@@ -12,7 +12,7 @@ test_that("user-defined score gives same result as optimization routine", {
     # expected outcome 
     counts <- compute_freq_table(data, nlev, j, pa)
     struct_exp <- optimize_partition(counts, levels[pa], ess = 1, 
-                                     method = method, regular = T, verbose = T)
+                                     method = method, regular = T, verbose = F)
     struct_exp <- struct_exp
     score_exp  <- sum(struct_exp$scores)
     
@@ -40,14 +40,14 @@ test_that("user-defined score gives same result as optimization routine", {
 
 test_that("user-defined score gives correct score with none or a single parent", {
   
-  data <- replicate(3, sample(0:1, 10, T))
-  nlev <- rep(2, 3)
-  levels <- lapply(nlev-1, seq.int, from = 0)
+  levels <- rep(list(0:1), 3)
+  nlev <- lengths(levels)
+  data <- sapply(levels, sample, size = 10, replace = T)
   j <- 1
   lookup <- rlang:::new_environment()
   
   scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = 1, 
-                                      local_struct = "tree", regular = TRUE, lookup = lookup)
+                              local_struct = "tree", regular = TRUE, lookup = lookup)
 
   # no parents 
   pa <- integer(0)
