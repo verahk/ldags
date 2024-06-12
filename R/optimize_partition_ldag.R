@@ -14,7 +14,8 @@
 #' counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
 #' res <- optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
 #' cbind(expand.grid(levels), n = counts, part = get_parts(res$partition))
-optimize_partition_ldag <- function(counts, levels, ess, 
+optimize_partition_ldag <- function(counts, levels, ess, regular, 
+                                    min_score_improv = 0,
                                     P = as.list(1:nrow(counts)-1), 
                                     labels = rep(list(integer()), length(levels)), 
                                     conf = as.matrix(expand.grid(levels)),
@@ -37,7 +38,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
   
   # search for label that improves score the most 
   keep_climb <- FALSE
-  best_diff <- 0
+  best_diff <- min_score_improv
   best_lab <- list()
   
   # check if all co-parent configs is already added to label
@@ -76,7 +77,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
     }
     
     # if no additional label can be added to edge from i, go to next node
-    if (! (length(labels[[i]]) < q/nlev[i]-1) ) next
+    if (regular && !(length(labels[[i]]) < q/nlev[i]-1) ) next
     
    
     # find labels that implies the same independencies
@@ -98,7 +99,7 @@ optimize_partition_ldag <- function(counts, levels, ess,
         
         # check if regular 
         PP <- c(P[-collapse], list(unlist(P[collapse])))
-        if (!is_regular(PP,  nlev, stride))  next 
+        if (regular && !is_regular(PP,  nlev, stride))  next 
         
         best_partition <- PP
         best_diff <- diff

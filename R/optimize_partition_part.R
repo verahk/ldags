@@ -16,7 +16,11 @@
 #' levels <- list(0:1, 0:1)
 #' counts <- cbind(c(10, 100, 100, 100), rep(10, 4))
 #' optimize_partition_part(counts, levels, ess = 1, verbose = T)
-optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(counts)-1), lkappa = 0, ldag_consistent = T, verbose = FALSE){
+optimize_partition_part <- function(counts, levels,  ess, regular, 
+                                    min_score_improv = 0,
+                                    P = as.list(1:nrow(counts)-1), 
+                                    ldag_consistent = T, 
+                                    verbose = FALSE){
   
   q   <- nrow(counts)
   r   <- ncol(counts)
@@ -29,7 +33,7 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
   # find the two current parts that increase the score most if collapsed
   keep_climb <- FALSE
   if (length(P) > 2) {
-    best_diff <- -(r-1)*lkappa
+    best_diff <- min_score_improv
     nlev <- lengths(levels)
     stopifnot(all(nlev == 2))
     stride <- c(1, cumprod(nlev[-length(nlev)]))
@@ -57,7 +61,7 @@ optimize_partition_part <- function(counts, levels,  ess, P = as.list(1:nrow(cou
           PP  <- c(P[-c(i, j)], list(new_part))
           
           # check if collapsing part i and j result in regular partition
-          if (ldag_consistent && !is_regular(PP, nlev, stride))  next
+          if (regular && !is_regular(PP, nlev, stride))  next
        
           best_diff <- diff
           best_partition <- PP

@@ -8,25 +8,30 @@
 #' 
 #' # binary tree
 #' levels <- list(0:1, 0:1)
-#' counts <- cbind(c(10, 100, 100, 100), 1)
-#' ess <- 1
-#' res <- optimize_partition_tree(counts, levels, ess = ess, verbose = TRUE)
-#' res$partition 
+#' counts <- cbind(10, c(10**2, 10**2, 10**3, 10**3))
+#' res <- optimize_partition_tree(counts, levels, verbose = TRUE)
 #' cbind(counts, get_parts(res$partition))
+#' 
+#' counts <- cbind(5, c(10**2, 10**2, 10**3, 10**3))
+#' res <- optimize_partition_tree(counts, levels, verbose = TRUE)
+#' res2 <- optimize_partition_tree(counts, levels, min_score_improv = -5, verbose = TRUE)
+#' cbind(counts, get_parts(res$partition), get_parts(res2$partition))
 #' 
 #' 
 #' # mixed cardinality
 #' levels <- list(0:1, 0:2)
-#' counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
-#' res <- optimize_partition_tree(counts, levels, ess = ess, verbose = T)
+#' counts <- cbind(1, 10, c(10, 10, 10**2, 10**2, 10**3, 10**3))
+#' res <- optimize_partition_tree(counts, levels, verbose = T)
 #' cbind(expand.grid(levels), n = counts, part = get_parts(res$partition))
 #' 
 #' # compare returned scores with score of partition
 #' gr <- get_parts(res$partition)
 #' tmp <- rowsum(counts, gr)
-#' scores <- famscore_bdeu_byrow(tmp, ess, r = ncol(counts), q = nrow(counts), s = lengths(res$partition))
-#' all.equal(scores, res$scores)
-optimize_partition_tree <- function(counts, levels, ess, verbose = verbose) {
+#' scores <- famscore_bdeu_byrow(tmp, 1, r = ncol(counts), q = nrow(counts), s = lengths(res$partition))
+#' all.equal(unname(scores), res$scores)
+#' 
+#' 
+optimize_partition_tree <- function(counts, levels, ess = 1, min_score_improv = 0, verbose = verbose) {
   
 
   nlev <- lengths(levels)
@@ -35,12 +40,12 @@ optimize_partition_tree <- function(counts, levels, ess, verbose = verbose) {
   r <- ncol(counts)
   q <- nrow(counts)
   
-  score <- famscore_bdeu_byrow(matrix(colSums(counts), nrow = 1), r, q = 1, s = 1, ess)
-  tree  <- grow_tree(counts, conf, score, stride, ess, r, q, verbose = verbose)
+  score <- famscore_bdeu_1row(colSums(counts), r, q = q, s = q, ess)
+  tree  <- grow_tree(counts, conf, score, stride, ess, r, q, min_score_improv, verbose = verbose)
   
   # return partition and scores of each part / leaf
-  list(partition = unname(list_leaves(tree, "outcomes")),
-       scores = unname(unlist(list_leaves(tree, "scores"))))
+  out <- list(partition = list_leaves(tree, "outcomes"),
+              scores = unlist(list_leaves(tree, "scores")))
 
 
 }
@@ -48,40 +53,46 @@ optimize_partition_tree <- function(counts, levels, ess, verbose = verbose) {
 
 list_leaves <- function(tree, name) {
   if (is.null(tree$branches)) {
-    tree[name]
+    unname(tree[name])
   } else {
-    unlist(lapply(tree$branches, list_leaves, name = name), recursive = FALSE)
+    unlist(lapply(tree$branches, list_leaves, name = name), recursive = F)
   }
 }
 
 
-grow_tree <- function(counts, conf, score, stride, ess, r = ncol(counts), q = nrow(counts), verbose = F) {
-  
+grow_tree <- function(counts, conf, score, stride, ess, r, q, min_score_improv, verbose){
+               
   
   keep_splitting <- FALSE
   if (nrow(counts) > 1) {
     # find best split
-    best_split <- find_best_split(counts, conf, ess, r, q, best_score = score)
-    keep_splitting <- length(best_split) > 0
+    best_split <- find_best_split(counts, conf, ess, r, q, best_score = score+min_score_improv)
+    keep_splitting <- length(best_split) > 0  # if FALSE, no split returns score greater than best_score
   }
   if (keep_splitting) {
-    # grow a new tree for each value of split variable
-    if (verbose) cat(sprintf("\nSplitvariable: %s, Splitvalue: %s, Scores: %s",
-                             best_split$var, best_split$vals, best_split$scores))
-    
    
+    if (verbose) cat("\ndiff:", sum(best_split$scores)-score,
+                      "Splitvariable:", best_split$var,
+                      "Splitvalue:", best_split$vals,
+                      "Scores:", best_split$scores)
+    
+    # grow a new tree for each value of split variable
     best_split$branches <- vector("list", length(best_split$vals))
-    for (k in best_split$vals+1) {
+    nvals <- length(best_split$vals)
+    for (k in seq_len(nvals)) {
       indx <- conf[, best_split$var] == k-1
-      best_split$branches[[k]] <- grow_tree(counts[indx, , drop = F], 
-                                            conf[indx, , drop = F], 
-                                            best_split$scores[k], 
-                                            stride, ess, r, q, verbose)
+      best_split$branches[[k]] <- grow_tree(counts = counts[indx, , drop = F], 
+                                            conf = conf[indx, , drop = F], 
+                                            score = best_split$scores[k], 
+                                            stride, ess, r, q, 
+                                            min_score_improv/nvals, 
+                                            verbose)
     }
   } else {
+    
     # return leaf node
     best_split <- list(outcomes = conf%*%stride,   # enumerate outcomes in part
-                       scores = score)            # local-local score
+                       scores = score)             # score contribution of part
   }
   return(best_split) 
 }
