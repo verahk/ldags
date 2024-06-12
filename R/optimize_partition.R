@@ -20,12 +20,12 @@
 #' - `scores`: each part's contribution to the local score
 #' -  additional output from the different optimization procedures.n
 #' @export
-optimize_partition <- function(counts, levels, ess, method, regular = F, verbose = FALSE){
+optimize_partition <- function(counts, levels, ess, method, regular = F, min_score_improv = 0, verbose = FALSE){
   method <- match.arg(method, c("tree", "ldag", "part"))
   res <- switch(method, 
-               "tree" = optimize_partition_tree(counts, levels, ess, min_score_improvement, verbose = verbose),
-               "ldag" = optimize_partition_ldag(counts, levels, ess, regular, min_score_improvement, verbose = verbose),
-               "part" = optimize_partition_part(counts, levels, ess, regular, min_score_improvement, verbose = verbose))
+               "tree" = optimize_partition_tree(counts, levels, ess, min_score_improv, verbose = verbose),
+               "ldag" = optimize_partition_ldag(counts, levels, ess, regular, min_score_improv, verbose = verbose),
+               "part" = optimize_partition_part(counts, levels, ess, regular, min_score_improv, verbose = verbose))
   
   if (regular && method == "tree") {
     # ensure that partition is regular

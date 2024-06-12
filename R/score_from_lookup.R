@@ -14,17 +14,23 @@
 score_from_lookup <- function(data, levels, nlev = lengths(levels), j, parentnodes, ess, method, regular, lookup) {
   
   if (length(parentnodes) > 1) {
+    
+    # get score from look up table
     parentnodes <- sort(parentnodes)
     id <- paste0(c(j, parentnodes), collapse = "|")
     score <- lookup[[method]][[id]]
-    # compute score and store in lookup-table
+    
+    # if not already computed, compute score and store in lookup-table
     if (is.null(score)) {
-      score <- compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess,  method, regular, lookup)
+      
+      score <- compute_local_bdeu_score(data, levels, nlev, j, parentnodes, ess, 
+                                        method = method, regular = regular)
       lookup[[method]][[id]] <- score
     }
+    
     return(score)
   } else {
-    compute_local_bdeu_score_from_data(data, levels, nlev, j, parentnodes, ess,  method, lookup)
+    compute_local_bdeu_score(data, levels, nlev, j, parentnodes, ess)
   }
 }
 

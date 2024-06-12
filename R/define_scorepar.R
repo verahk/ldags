@@ -1,5 +1,5 @@
 #' Title
-#'  
+#'
 #' @param data (matrix)
 #'  Each column is assumed to be outcomes of a categorical variable, with 
 #'  possible outcomes `0, ..., K-1.`
@@ -38,24 +38,25 @@ define_scorepar <- function(data, nlev, ess = 1, edgepf = 2, local_struct = NULL
       scorepar$lookup <- lookup
       
       usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
-        ldags:::score_from_lookup(scorepar$data,
-                                  levels = scorepar$levels,
-                                  nlev = scorepar$Cvec,
-                                  j,
-                                  parentnodes,
-                                  ess = scorepar$ess,
-                                  method = scorepar$local_struct,
-                                  lookup = scorepar$lookup) - length(parentnodes)*log(scorepar$edgepf)
+        score_from_lookup(scorepar$data,
+                          levels = scorepar$levels,
+                          nlev = scorepar$Cvec,
+                          j,
+                          parentnodes,
+                          ess = scorepar$ess,
+                          method = scorepar$local_struct,
+                          regular = scorepar$regular,
+                          lookup = scorepar$lookup) - length(parentnodes)*log(scorepar$edgepf)
       }
     } else {
       usrDAGcorescore <- function(j, parentnodes, n, scorepar) {
-        c(ldags:::compute_local_bdeu_score_from_data(data, 
-                                                   scorepar$levels, 
-                                                   scorepar$Cvec, 
-                                                   j, parentnodes, 
-                                                   ess = scorepar$ess, 
-                                                   struct = scorepar$local_struct, 
-                                                   regular = scorepar$regular)) - length(parentnodes)*log(scorepar$edgepf)
+        c(compute_local_bdeu_score(data, 
+                                   scorepar$levels, 
+                                   scorepar$Cvec, 
+                                   j, parentnodes, 
+                                   ess = scorepar$ess, 
+                                   method = scorepar$local_struct, 
+                                   regular = scorepar$regular)) - length(parentnodes)*log(scorepar$edgepf)
       }
     }
     
