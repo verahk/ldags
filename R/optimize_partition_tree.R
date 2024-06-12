@@ -40,7 +40,7 @@ optimize_partition_tree <- function(counts, levels, ess = 1, min_score_improv = 
   r <- ncol(counts)
   q <- nrow(counts)
   
-  score <- famscore_bdeu_1row(colSums(counts), r, q = q, s = q, ess)
+  score <- famscore_bdeu_1row(colSums(counts), ess, r, q = q, s = q)
   tree  <- grow_tree(counts, conf, score, stride, ess, r, q, min_score_improv, verbose = verbose)
   
   # return partition and scores of each part / leaf
