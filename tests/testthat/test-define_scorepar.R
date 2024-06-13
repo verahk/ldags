@@ -64,3 +64,34 @@ test_that("user-defined score gives correct score with none or a single parent",
   expect_equal(score, score_exp) 
   
 })
+
+test_that("user-defined score add correct edge penalty", {
+  levels <- rep(list(0:1), 3)
+  nlev <- lengths(levels)
+  data <- sapply(levels, sample, size = 10, replace = T)
+  
+  edgepf <- 2
+  scorepar <- define_scorepar(data, nlev, ess = 1, edgepf = edgepf, 
+                              local_struct = "tree", regular = FALSE, lookup = NULL)
+  
+  j  <- 1
+  pa <- 2
+  res <- BiDAG:::usrDAGcorescore(j, pa, length(nlev), scorepar)
+  
+  # expected value
+  famscore  <- compute_local_bdeu_score(data, levels, nlev, j, pa, ess = 1, method = "tree")
+  res_exp   <- c(famscore) - log(edgepf)*length(pa)
+  expect_equal(res, res_exp)
+  
+  j  <- 1
+  pa <- 2:3
+  res <- BiDAG:::usrDAGcorescore(j, pa, length(nlev), scorepar)
+  
+  # expected value
+  famscore  <- compute_local_bdeu_score(data, levels, nlev, j, pa, ess = 1, method = "tree")
+  res_exp   <- c(famscore) - log(edgepf)*length(pa)
+  expect_equal(res, res_exp)
+  
+  
+  
+})

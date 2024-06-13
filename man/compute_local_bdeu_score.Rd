@@ -5,24 +5,58 @@
 \title{Title}
 \usage{
 compute_local_bdeu_score(
-  counts,
-  ess,
-  r = ncol(counts),
-  q = nrow(counts),
-  s = 1
+  data,
+  levels,
+  nlev = lengths(levels),
+  j,
+  parentnodes,
+  ess = 1,
+  method = NULL,
+  ...
 )
 }
 \arguments{
-\item{counts}{}
+\item{data}{}
 
-\item{ess}{}
+\item{levels}{}
 
-\item{r}{}
+\item{nlev}{}
 
-\item{q}{}
+\item{j}{(integer)
+column index of node}
 
-\item{s}{}
+\item{parentnodes}{(integer vector)
+column indicies of parent nodes. A vector of length 0 (e.g. \code{integer(0)})
+translates to no parents.}
+
+\item{ess}{(numeric constant)
+equivalent sample size.}
+
+\item{method}{(character)
+algorithm to learn local structure. See \link{optimize_partition}.
+If \code{NULL} (default) no local structure is learned. Ignored if \code{length(parentnodes) < 2}.}
+
+\item{...}{additional parameters sent to \code{\link[=optimize_partition]{optimize_partition()}}.}
+}
+\value{
+a numeric constant, the Bdeu-score. If a local structure is inferred,
+this is returned as an named attribute (\code{structure}).
 }
 \description{
 Title
+}
+\examples{
+
+levels <- rep(list(0:1), 3)
+nlev   <- lengths(levels)
+data   <- sapply(levels, sample, size = 10, replace = TRUE)
+
+# no parent
+compute_local_bdeu_score(data, levels, nlev, 1, integer(0))
+
+# single parent
+compute_local_bdeu_score(data, levels, nlev, 1, 2)
+
+# multiple parents
+compute_local_bdeu_score(data, levels, nlev, 1, 2:3, method = "ldag")
 }

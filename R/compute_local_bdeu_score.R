@@ -25,7 +25,7 @@
 #' 
 #' levels <- rep(list(0:1), 3)
 #' nlev   <- lengths(levels)
-#' data   <- sapply(levels, sample, size = 10, replace = T)
+#' data   <- sapply(levels, sample, size = 10, replace = TRUE)
 #' 
 #' # no parent
 #' compute_local_bdeu_score(data, levels, nlev, 1, integer(0))

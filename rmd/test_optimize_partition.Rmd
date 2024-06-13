@@ -23,12 +23,12 @@ tester <- function(counts, levels, methods = c("tree", "ldag", "part"), regular 
   df <- cbind(expand.grid(levels), n = counts)
   scores <- setNames(numeric(length(methods)), methods)
   for (method in methods) {
-    res <- ldags:::optimize_partition(counts, levels, ess = 1, method, regular = regular)
+    res <- optimize_partition(counts, levels, ess = 1, method, regular = regular)
     df[[method]] <- get_parts(res$partition)
     scores[method] <- sum(res$scores)
   }
   df[["none"]] <- seq_len(nrow(counts))
-  scores["none"] <- sum(compute_local_bdeu_score(counts, 1, ncol(counts), nrow(counts), s = 1))
+  scores["none"] <- sum(ldags:::compute_local_bdeu_score_from_counts(counts, 1, ncol(counts), nrow(counts), s = 1))
   return(list(df, scores))
 }
 ```
@@ -50,11 +50,11 @@ tester(counts, levels)
 The `tree`-partition returns only one region, i.e. the no-parent CPT, as the score is not improved by splitting on any of the parent variables for the given frequency table. 
 ```{r}
 cat("Score, P(Y|X1, X2):")
-compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1)
+ldags:::compute_local_bdeu_score_from_counts(counts, ess = 1, r = 2, q = 4, s = 1)
 cat("Score, P(Y|X2):")
-compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
+ldags:::compute_local_bdeu_score_from_counts(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat("Score P(Y):")
-compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
+ldags:::compute_local_bdeu_score_from_counts(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
 ```
 The `make_regular` option of the `optimize_partition` function forces a partition that do not implicitly encode any conditional independencies.
 ```{r}
@@ -67,16 +67,16 @@ In the following example, also the `tree` procedure captures the correct local s
 ```{r}
 levels <- rep(list(0:1), 2)
 counts <- cbind(c(100, 10, 10, 10), c(10, 100, 100, 100))
-tester(counts, levels)
+tester(counts, levels, regular = F)
 ```
 
 ```{r}
 cat("Score, P(Y|X1, X2):")
-sum(compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1))
+ldags:::compute_local_bdeu_score_from_counts(counts, ess = 1, r = 2, q = 4, s = 1)
 cat("Score, P(Y|X2):")
-sum(compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+ldags:::compute_local_bdeu_score_from_counts(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat("Score P(Y):")
-compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
+ldags:::compute_local_bdeu_score_from_counts(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)
 ```
 
 
@@ -92,8 +92,8 @@ for (i in 1:100) {
   counts <- matrix(rgamma(2**(length(levels)+1), shape = 1), ncol = 2)
   fits <- list()
 
-  fits$part <- optimize_partition(counts, levels, ess, "part", regular = F, F)
-  fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = F, F)
+  fits$part <- optimize_partition(counts, levels, ess, "part", regular = T, F)
+  fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = T, F)
 
   partitions <- sapply(lapply(fits, "[[", "partition"), get_parts)
   
@@ -103,9 +103,9 @@ for (i in 1:100) {
     cbind(expand.grid(levels), partitions)
     
     cat("\npart:")
-    fits$part <- optimize_partition(counts, levels, ess, "part", regular = F, T)
+    fits$part <- optimize_partition(counts, levels, ess, "part", regular = T, T)
     cat("\nldag:")
-    fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = F, T)
+    fits$ldag <- optimize_partition(counts, levels, ess, "ldag", regular = T, T)
     
     is_CSI_consistent(fits$part$partition, nlev)
     is_regular(fits$part$partition, nlev)
@@ -140,10 +140,10 @@ for (i in seq_along(bn)) {
   parts$true <- match(cpt[, 1], cpt[, 1]) 
   
   counts <- compute_freq_table(data, nlev, i, pa)
-  fit    <- optimize_partition(counts, levels[pa], 1, "tree", verbose = F)
+  fit    <- optimize_partition(counts, levels[pa], 1, "tree", regular = T, verbose = F)
   parts$tree  <- get_parts(fit$partition)
   
-  fit    <- optimize_partition(counts, levels[pa], 1, "ldag", verbose = F)
+  fit    <- optimize_partition(counts, levels[pa], 1, "ldag", regular = T, verbose = F)
   parts$ldag  <- get_parts(fit$partition)
 
   cat("\nVariable:", i, 
@@ -155,25 +155,31 @@ for (i in seq_along(bn)) {
   #print(data.frame(cpt[, 1], counts, parts))
 }            
 ```
+
 ```{r}
+levels <- rep(list(0:1), 3)
+counts <- cbind(10, 10**rep(0:3, 2)) #seq(0, 3, length.out = 8))
+
+for (reg in c(TRUE, FALSE)) {
+  fits <- list(ldag = optimize_partition(counts, levels, 1, "ldag", regular = reg, verbose = T),
+               tree = optimize_partition(counts, levels, 1, "tree", regular = reg, verbose = T))
+  print(cbind(counts, sapply(fits, function(x) get_parts(x$partition))))
+  print(sapply(fits, function(x) sum(x$scores)))
+}
+
+levels <- rep(list(0:1), 3)
+counts <- cbind(10, 10*seq(0, 3, length.out = 8))
+for (reg in c(TRUE, FALSE)) {
+  fits <- list(ldag = optimize_partition(counts, levels, 1, "ldag", regular = reg, verbose = F),
+               tree = optimize_partition(counts, levels, 1, "tree", regular = reg, verbose = F))
+  print(cbind(counts, sapply(fits, function(x) get_parts(x$partition))))
+  print(sapply(fits, function(x) sum(x$scores)))
+}
+
 
 ```
 
 
-```{r}
-
-i <- 3
-par <- which(dag[, i] == 1)
-counts <- compute_freq_table(data, nlev, i, par)
-microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, "part"),
-                               optimize_partition(counts, levels[par], 1, "ldag"))
-
-i <- 10
-par <- which(dag[, i] == 1)
-counts <- compute_freq_table(data, nlev, i, par)
-microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, "part"),
-                               optimize_partition(counts, levels[par], 1, "ldag"))
-```
 
 
 

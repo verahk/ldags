@@ -8,8 +8,9 @@ optimize_partition_part(
   counts,
   levels,
   ess,
+  regular,
+  min_score_improv = 0,
   P = as.list(1:nrow(counts) - 1),
-  lkappa = 0,
   ldag_consistent = T,
   verbose = FALSE
 )
@@ -23,11 +24,11 @@ optimize_partition_part(
 
 \item{P}{}
 
-\item{lkappa}{}
-
 \item{verbose}{}
 
 \item{nlev}{}
+
+\item{lkappa}{}
 }
 \description{
 Title

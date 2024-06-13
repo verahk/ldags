@@ -1,6 +1,6 @@
 ---
 title: "Simulation study: Sample DAGs with local structure"
-subtitle: "Network: LDAG10. Contrasting parameters: graph prior / edge penalty."
+subtitle: "Network: LDAG10. Contrasting parameters: graph prior / edge penalty and regularization"
 author: "Vera Kvisgaard"
 output: 
   html_document: 
@@ -17,8 +17,10 @@ Precision-recall of ancestor relation probabilities from simulations run on a 10
 - `struct` algorithm for optimizing the local structure of CPTs. 
 - `sample` algorithm for sampling structures (`order` or `partition`)
 - `epf` edge penalty, a penalty term `-length(parentnodes)*log(epf)` is added to the local marginal likelihoods.
+- `regular` if `TRUE` the optimized local structures are forced to be regular. 
 - `ess = 1`, equivalent sample size of Bdeu-prior.
 - `hardlimit = 5`, maximum parent size.
+
 
 #### Notes: 
 - For each simulation run `r` and samplesize `N` (unintended), a random distribution over the structure is drawn and a data set sampled from the network. The same data set is used across all other params. 
@@ -39,31 +41,38 @@ library(doSNOW)
 library(foreach)
 library(dplyr)
 library(ggplot2)
-here::i_am("./simulations/LDAG10_2/results.Rmd")
-simname <- "LDAG10_2"
+
+simname <- "bn_2"
+here::i_am(paste0("./simulations/", simname, "/results.Rmd"))
+
+bnnames <- c("asia", "sachs", "child")
+filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
+names <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
+
 ```
 
 
 ```{r eval routines}
 
-eval_files <- function(filepaths, bnname, verbose = F) {
+eval_files <- function(filepaths, bnname, prmethod, verbose = F) {
   
   indx <- grepl(bnname, filepaths, T)
   if (!all(indx)) stop("All files do not match bnname.")
   
   bn <- readRDS(here::here("./data/", paste0(bnname, ".rds")))
   n  <-  length(bn)
-  dindx <- diag(n) == 1
-  dag  <- bnlearn::amat(bn)[!dindx]
-  dmat <- bida:::descendants(bn)[!dindx]
+  dag  <- bnlearn::amat(bn)
+  dmat <- bida:::descendants(bn)
   
   res <- foreach(f = filepaths, 
                  .combine  = "rbind",
-                 .packages = "Matrix") %dopar% eval_MCMCchain(f, seq_len(200), dag, dmat, n, verbose = verbose)
+                 .packages = "Matrix") %dopar% eval_MCMCchain(f, dag, dmat, n, prmethod, seq_len(200), verbose = verbose)
+  
+  cbind(as.list(filepaths), res)
 }
 
 
-eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
+eval_MCMCchain <- function(f, dag, dmat, n, prmethod, burninsamples, verbose = T) {
   if (verbose) cat(f)
   MCMCchain  <- readRDS(f)
   if ("smpl" %in% names(MCMCchain))  MCMCchain <- MCMCchain$smpl
@@ -88,17 +97,16 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
   # edge probs
   n1 <- sum(dag)
 
-  res[1, 1] <- sum(edgep[dag == 1])/n1
-  res[1, 2] <- sum(edgep[dag == 0])/(n**2-n-n1)
-  res[1, 3] <- compute_avgppv_noise(c(edgep), c(dag))
+  res[1, 1] <- sum(edgep[dag[!dindx] == 1])/n1
+  res[1, 2] <- sum(edgep[dag[!dindx] == 0])/(n**2-n-n1)
+  res[1, 3] <- ldags:::compute_avgppv(edgep, dag[!dindx], method = prmethod)
   
   # arp
-  pr <- compute_prec_recall_noise(ancp, dmat)
+  pr <- ldags:::compute_prec_recall(ancp, dmat[!dindx], method = prmethod)
   
-  n1 <- sum(dmat)
-  probs <- Reduce("+", Map("*", dmats, support))[!dindx]
-  res[2, 1] <- sum(ancp[dmat == 1])/n1
-  res[2, 2] <- sum(ancp[dmat == 0])/(n**2-n-n1)
+  n1 <- sum(dmat)-n
+  res[2, 1] <- sum(ancp[dmat[!dindx] == 1])/n1
+  res[2, 2] <- sum(ancp[dmat[!dindx] == 0])/(n**2-n-n1)
   #res[2, 3] <- compute_avgppv(ancp, dmat)
   res[2, 3] <- pr$avgppv 
   
@@ -109,69 +117,21 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
   
 }
 
-compute_prec_recall_noise <- function(x, y) {
-  indx <- order(x+runif(x)/10**5, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  list(df = data.frame(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(x)),
-       avgppv = mean((tp/seq_along(x))[y[indx]>0]))
-}
 
-compute_prec_recall <- function(x, y, expand = F) {
-  
-  indx <- order(x, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  pp   <- seq_along(x)
-  n1   <- tp[length(y)]
-  
-  dups <- duplicated(x[indx], fromLast = TRUE)
-  PPV  <- tp[!dups]/pp[!dups]
-  w    <- diff(c(0, tp[!dups]))
-
-  if (expand){
-    rate <- PPV[length(PPV)]
-    list(df = data.frame(x = c(Inf, x[indx][!dups], -Inf),
-                         TPR = c(0, tp[!dups]/n1, 1),
-                         PPV = c(1, PPV, rate)),
-         avgppv = 1/n1*sum(w*PPV))
-  } else {
-    list(df = data.frame(x = x[indx][!dups],
-                         TPR = tp[!dups]/n1,
-                         PPV = PPV),
-         avgppv = 1/n1*sum(w*PPV))
-  }
-
-}
-
-compute_avgppv <- function(x, y) {
-  
-  indx <- order(x, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  pp   <- seq_along(x)
-  
-  dups <- duplicated(x[indx], fromLast = TRUE)
-  #cbind(dups, x[indx], c(y[indx]), tp, pp)
-  
-  w <- diff(c(0, tp[!dups]))/tp[length(x)]
-  #cbind(tp = tp[!dups], pp = pp[!dups], tpr = tp[!dups]/tp[length(x)], ppv = tp[!dups]/pp[!dups], w)
-  
-  sum(w*tp[!dups]/pp[!dups])
-}
-
-compute_avgppv_noise <- function(x, y) {
-  indx <- order(x+runif(length(x))/1000, decreasing = TRUE)
-  tp <- cumsum(y[indx])
-  pp <- seq_along(x)
-  mean((tp/pp)[y[indx] == 1])
-}
-
-res_to_df <- function(res, filepaths, names = c("network", "algo", "struct", "N", "epf", "r")) {
+res_to_df <- function(res, filepaths = rownames(res), names = c("network", "init", "struct", "sample", "epf", "regular", "N", 
+"r")) {
   
   tmp <- stringr::str_split(filepaths, ".+MCMCchains/|_|.rds", simplify = F)
   par <- data.frame(do.call(rbind, tmp)[, seq_along(names)+1])
   colnames(par) <- names
-  par$N <- factor(par$N, c("N100", "N300", "N1000", "N3000", "N10000"))
-  par$epf <- factor(par$epf, paste0("epf", c(1, 2, 4, 10**3, 10**4, 10**5)))
-  
+  char_to_factor <- function(x, sub) {
+    u <- unique(x)
+    ordr <- order(as.numeric(gsub(sub, "", u)))
+    factor(x, u[ordr])
+  }
+  par$N <- char_to_factor(par$N, "N")
+  par$epf <- char_to_factor(par$epf, "epf")
+
   tmp <- do.call(rbind, res)
   if (nrow(tmp) == length(filepaths)) {
     return(cbind(par, tmp))
@@ -187,10 +147,14 @@ res_to_df <- function(res, filepaths, names = c("network", "algo", "struct", "N"
 
 ```{r}
 plot_box_plot <- function(df, x, y, title = "", fill = "struct", facets = "algo+name~network+epf") {
-  ggplot(df, aes(x = !! sym(x), y = !! sym(y), fill = !! sym(fill))) +
+  plot <- ggplot(df, aes(x = !! sym(x), y = !! sym(y), fill = !! sym(fill))) +
     facet_grid(as.formula(facets), scales = "free") +
     geom_boxplot() +
-    ggtitle(title)      
+    ggtitle(title) +
+    theme(legend.position = "bottom")
+  
+  if (fill == "struct") plot <- plot + scale_fill_manual(values = c(dag = "green", ldag = "red", tree = "blue"))
+  return(plot)
 }
 plot_prec_recall <- function(df, title = "", facets = "algo+struct+epf~network+N") {
   rate <- df$PPV[nrow(df)]
@@ -215,18 +179,18 @@ plot_prec_recall_step <- function(df, title = "", facets = "algo+struct+epf~netw
 
 Compute precision recall of each sample of DAGs
 ```{r load res, cache = T}
-bnname <- "LDAG10"
-filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
-names <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
-filepaths <- filepaths[!grepl("N10000", filepaths)]
-
-
 cl <- makeCluster(5, "SOCK", outfile = "")
 export <- as.vector(lsf.str(envir = .GlobalEnv))
 clusterExport(cl, export)
 registerDoSNOW(cl)
   
-res <- eval_files(filepaths, bnname, verbose = T)
+res <- list()
+for (bnname in bnnames) {
+  indx <- grepl(bnname, filepaths)
+  stopifnot(any(indx))
+  res[[bnname]] <-  eval_files(filepaths[indx], bnname, prmethod = "noise", verbose = T)
+}
+
 
 ```
 
@@ -241,46 +205,81 @@ tidyr::pivot_wider(aggregate(rep(1, nrow(df)), df[, names[!names == "r"]], sum),
 
 
 
-# TRUE AND FALSE POSITIVE RATE 
-```{r cache = T}
-df <- res_to_df(res[, 2], filepaths, names)
-facets <- "init+sample~regular+epf"
-plot_box_plot(df, "N", "TPR", facets = facets)
-plot_box_plot(df, "N", "FPR", facets = facets)
-```
 
-# AVERAGE PRECISION
-Across samplesize:
+# AVERAGE PRECISION, TRUE AND FALSE POSITIVES 
+Across edge penalty `epf` and regularity `reg`:
 ```{r}
 df <- res_to_df(res[, 2], filepaths, names)
-facets <- "init+sample~regular+epf"
-plot_box_plot(df, "N", "avgppv", facets = facets)
-```
 
-Across edge penalty `epf`:
-```{r}
-df <- res_to_df(res[, 2], filepaths, names)
-df <- df[df$regular == "reg0", ]
-facets <- "init+sample~regular+N"
-plot_box_plot(df, x = "epf", y = "avgppv", facets = facets)
+facets <- "init+sample+N~struct"
+plot_box_plot(df, x = "epf", y = "avgppv", fill = "regular", facets = facets) + ylim(0, 1)
+plot_box_plot(df, x = "epf", y = "TPR", fill = "regular", facets = facets) + ylim(0, 1)
+plot_box_plot(df, x = "epf", y = "FPR", fill = "regular", facets = facets) + ylim(0, 1)
 ```
 
 
-# PRECISION RECALL CURVES
+
+# PRECISION RECALL CURVES ---
 ```{r PR-curves}
-df <- res_to_df(res[, 3], filepaths, names)
+
+indx <- grepl("_epf1_|_epf10_|_epf100_", filepaths) & grepl("_N1000_", filepaths)
+df <- res_to_df(res[indx, 3], filepaths[indx], names)
 
 for (x in unique(df$init)) {
-  for (NN in unique(df$N)) {
-    if (NN == "N10000")
-    facets <- "init+regular+epf+sample+N~struct"
-    indx <- df$init == x & df$N == NN
+
+    facets <- "init+epf+sample~N+struct+regular"
+    indx <- df$init == x 
     plot <- plot_prec_recall(df[indx, ], facets = facets)
     print(plot)
-  }
+  
 }
 ```
 
+# EDGE PROBABILITIES ---- 
+```{r}
+indx <- grepl("N1000", filepaths)
+df <- res_to_df(res[indx, 1], filepaths[indx], names)
+df <- tidyr:::pivot_longer(df, -all_of(names))
+
+bn <- readRDS(here::here("./data/LDAG10.rds"))
+n <- 10
+df$y <- (as.numeric(df$name)-1)%/%(n-1) +1
+df$x <- rep(.row(c(n, n))[!diag(n) == 1], sum(indx))
+
+df_agg <- group_by(df, across(c(names[-length(names)], "x", "y"))) %>% 
+  summarize(mean = mean(value))
+df_agg$cpdag <- bnlearn::amat(bnlearn::cpdag(bn))[cbind(df_agg$x, df_agg$y)]
+df_agg$true <- bnlearn::amat(bn)[cbind(df_agg$x, df_agg$y)]
+
+
+df_agg %>% 
+  filter(epf == "epf10", regular == "reg1") %>% 
+ggplot(aes(as.factor(x), as.factor(y), 
+                   size = mean, 
+                   color = interaction(true, cpdag))) +
+  facet_grid(epf+regular~struct) +
+  geom_point() +
+  scale_y_discrete(limits=rev) 
+
+df_agg %>% 
+  filter(struct != "dag") %>% 
+  tidyr::pivot_wider(names_from = "regular", values_from = "mean") %>% 
+  ggplot(aes(reg0, reg1, color = interaction(true, cpdag))) + 
+    facet_grid(epf~struct) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0)
+
+df_agg %>% 
+  filter(regular == "reg1") %>% 
+  tidyr::pivot_wider(names_from = "struct", values_from = "mean") %>% 
+  filter(!is.na(dag)) %>% 
+  tidyr::pivot_longer(c("ldag", "tree"), names_to = "struct") %>% 
+  ggplot(aes(dag, value, color = interaction(true, cpdag))) + 
+    facet_grid(epf~struct) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0)
+
+```
 
 # RUN TIMES 
 ```{r}

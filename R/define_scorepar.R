@@ -1,17 +1,21 @@
 #' Title
 #'
 #' @param data (matrix)
-#'  Each column is assumed to be outcomes of a categorical variable, with 
+#'  each column is assumed to be outcomes of a categorical variable, with 
 #'  possible outcomes `0, ..., K-1.`
 #' @param nlev (integer vector)
-#'  Cardinality of each variable.
-#' @param ess 
-#' @param edgepf 
-#' @param local_struct 
-#' @param regular 
-#' @param lookup 
+#'  cardinality of each variable.
+#' @param ess (numeric constant)
+#'  equivalent sample size
+#' @param edgepf (numeric constant)
+#'  a factor `-log(edgepf)*length(parentnodes)` is added to the marginal likelihood score.
+#' @param local_struct, regular 
+#'  parameters controlling the local-structure-optimization routine. See [optimize_partition()].
+#' @param lookup (environment)
+#'  an environment in which the optimized structures are saved, initiated by rlang:::new_environment().
+#'  If `NULL` the structures are not  saved.
 #'
-#' @return
+#' @return an object of class [BiDAG::scoreparameters]
 #' @export
 #'
 #' @examples

@@ -8,7 +8,15 @@
 \alias{optimize_partition_tree}
 \title{Optimize partition over parent outcome space}
 \usage{
-optimize_partition(counts, levels, ess, method, regular = F, verbose = FALSE)
+optimize_partition(
+  counts,
+  levels,
+  ess,
+  method,
+  regular = F,
+  min_score_improv = 0,
+  verbose = FALSE
+)
 
 optimize_partition_from_cpt(cpt, ess, method, regular = T, return_cpt = TRUE)
 
@@ -16,13 +24,21 @@ optimize_partition_ldag(
   counts,
   levels,
   ess,
+  regular,
+  min_score_improv = 0,
   P = as.list(1:nrow(counts) - 1),
   labels = rep(list(integer()), length(levels)),
   conf = as.matrix(expand.grid(levels)),
   verbose = FALSE
 )
 
-optimize_partition_tree(counts, levels, ess, verbose = verbose)
+optimize_partition_tree(
+  counts,
+  levels,
+  ess = 1,
+  min_score_improv = 0,
+  verbose = verbose
+)
 }
 \arguments{
 \item{counts}{(integer matrix)
@@ -61,7 +77,7 @@ Optimize a regression-tree partitioning of the conditional outcome space.
 # ldag
 levels <- list(0:1, 0:1)
 counts <- cbind(c(10, 20, 30, 40), rep(10, 4))
-optimize_partition_ldag(counts, levels, ess = 1, verbose = T)
+optimize_partition_ldag(counts, levels, ess = 1, regular = T, verbose = T)
 
 # mixed cardinality
 levels <- list(0:1, 0:2)
@@ -71,22 +87,27 @@ cbind(expand.grid(levels), n = counts, part = get_parts(res$partition))
 
 # binary tree
 levels <- list(0:1, 0:1)
-counts <- cbind(c(10, 100, 100, 100), 1)
-ess <- 1
-res <- optimize_partition_tree(counts, levels, ess = ess, verbose = TRUE)
-res$partition 
+counts <- cbind(10, c(10**2, 10**2, 10**3, 10**3))
+res <- optimize_partition_tree(counts, levels, verbose = TRUE)
 cbind(counts, get_parts(res$partition))
+
+counts <- cbind(5, c(10**2, 10**2, 10**3, 10**3))
+res <- optimize_partition_tree(counts, levels, verbose = TRUE)
+res2 <- optimize_partition_tree(counts, levels, min_score_improv = -5, verbose = TRUE)
+cbind(counts, get_parts(res$partition), get_parts(res2$partition))
 
 
 # mixed cardinality
 levels <- list(0:1, 0:2)
-counts <- cbind(10, 1, c(10, 10, 10**2, 10**2, 10**3, 10**3))
-res <- optimize_partition_tree(counts, levels, ess = ess, verbose = T)
+counts <- cbind(1, 10, c(10, 10, 10**2, 10**2, 10**3, 10**3))
+res <- optimize_partition_tree(counts, levels, verbose = T)
 cbind(expand.grid(levels), n = counts, part = get_parts(res$partition))
 
 # compare returned scores with score of partition
 gr <- get_parts(res$partition)
 tmp <- rowsum(counts, gr)
-scores <- famscore_bdeu_byrow(tmp, ess, r = ncol(counts), q = nrow(counts), s = lengths(res$partition))
-all.equal(scores, res$scores)
+scores <- famscore_bdeu_byrow(tmp, 1, r = ncol(counts), q = nrow(counts), s = lengths(res$partition))
+all.equal(unname(scores), res$scores)
+
+
 }

@@ -15,7 +15,7 @@ run_sample_dags <- function(simpar, outdir = NULL, simid = "", verbose = F) {
 
   # load BN
   if (bnname == "LDAG10") {
-    set.seed(N+r)
+    set.seed(r)
     bn <- ldags:::example_bn(bnname)
   } else {
     bn <- readRDS(paste0("./data/", bnname, ".rds"))
@@ -27,7 +27,7 @@ run_sample_dags <- function(simpar, outdir = NULL, simid = "", verbose = F) {
   nlev <- sapply(bn, function(x) dim(x$prob)[1])
   
   # define scorepars
-  scorepar <- ldags:::define_scorepar(data, nlev, ess = ess, edgepf = edgepf, local_struct = struct)
+  scorepar <- ldags:::define_scorepar(data, nlev, ess = ess, edgepf = edgepf, local_struct = struct, regular = regular)
   
   # run MCMC
   smpl <- ldags:::sample_dags(scorepar, init, sample, hardlimit = hardlimit, verbose = verbose)

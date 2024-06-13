@@ -16,21 +16,27 @@ define_scorepar(
 }
 \arguments{
 \item{data}{(matrix)
-Each column is assumed to be outcomes of a categorical variable, with
+each column is assumed to be outcomes of a categorical variable, with
 possible outcomes \verb{0, ..., K-1.}}
 
 \item{nlev}{(integer vector)
-Cardinality of each variable.}
+cardinality of each variable.}
 
-\item{ess}{}
+\item{ess}{(numeric constant)
+equivalent sample size}
 
-\item{edgepf}{}
+\item{edgepf}{(numeric constant)
+a factor \code{-log(edgepf)*length(parentnodes)} is added to the marginal likelihood score.}
 
-\item{local_struct}{}
+\item{local_struct, }{regular
+parameters controlling the local-structure-optimization routine. See \code{\link[=optimize_partition]{optimize_partition()}}.}
 
-\item{regular}{}
-
-\item{lookup}{}
+\item{lookup}{(environment)
+an environment in which the optimized structures are saved, initiated by rlang:::new_environment().
+If \code{NULL} the structures are not  saved.}
+}
+\value{
+an object of class \link[BiDAG:scoreparameters]{BiDAG::scoreparameters}
 }
 \description{
 Title
