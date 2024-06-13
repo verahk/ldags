@@ -18,7 +18,7 @@ Precision-recall of ancestor relation probabilities from simulations run on a 10
 - `sample` algorithm for sampling structures (`order` or `partition`)
 - `epf` edge penalty, a penalty term `-length(parentnodes)*log(epf)` is added to the local marginal likelihoods.
 - `ess = 1`, equivalent sample size of Bdeu-prior.
-- `hardlimit = 4`, maximum parent size.
+- `hardlimit = 5`, maximum parent size.
 
 #### Notes: 
 - For each simulation run `r` and samplesize `N` (unintended), a random distribution over the structure is drawn and a data set sampled from the network. The same data set is used across all other params. 
@@ -90,7 +90,7 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
 
   res[1, 1] <- sum(edgep[dag == 1])/n1
   res[1, 2] <- sum(edgep[dag == 0])/(n**2-n-n1)
-  res[1, 3] <- compute_avgppv(c(edgep), c(dag))
+  res[1, 3] <- compute_avgppv_noise(c(edgep), c(dag))
   
   # arp
   pr <- compute_prec_recall_noise(ancp, dmat)
@@ -109,60 +109,7 @@ eval_MCMCchain <- function(f, burninsamples, dag, dmat, n, verbose = T) {
   
 }
 
-compute_prec_recall_noise <- function(x, y) {
-  indx <- order(x+runif(x)/10**5, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  list(df = data.frame(x = x[indx], TPR = tp/sum(y), PPV = tp/seq_along(x)),
-       avgppv = mean((tp/seq_along(x))[y[indx]>0]))
-}
 
-compute_prec_recall <- function(x, y, expand = F) {
-  
-  indx <- order(x, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  pp   <- seq_along(x)
-  n1   <- tp[length(y)]
-  
-  dups <- duplicated(x[indx], fromLast = TRUE)
-  PPV  <- tp[!dups]/pp[!dups]
-  w    <- diff(c(0, tp[!dups]))
-
-  if (expand){
-    rate <- PPV[length(PPV)]
-    list(df = data.frame(x = c(Inf, x[indx][!dups], -Inf),
-                         TPR = c(0, tp[!dups]/n1, 1),
-                         PPV = c(1, PPV, rate)),
-         avgppv = 1/n1*sum(w*PPV))
-  } else {
-    list(df = data.frame(x = x[indx][!dups],
-                         TPR = tp[!dups]/n1,
-                         PPV = PPV),
-         avgppv = 1/n1*sum(w*PPV))
-  }
-
-}
-
-compute_avgppv <- function(x, y) {
-  
-  indx <- order(x, decreasing = TRUE)
-  tp   <- cumsum(y[indx])
-  pp   <- seq_along(x)
-  
-  dups <- duplicated(x[indx], fromLast = TRUE)
-  #cbind(dups, x[indx], c(y[indx]), tp, pp)
-  
-  w <- diff(c(0, tp[!dups]))/tp[length(x)]
-  #cbind(tp = tp[!dups], pp = pp[!dups], tpr = tp[!dups]/tp[length(x)], ppv = tp[!dups]/pp[!dups], w)
-  
-  sum(w*tp[!dups]/pp[!dups])
-}
-
-compute_avgppv_noise <- function(x, y) {
-  indx <- order(x+runif(length(x))/1000, decreasing = TRUE)
-  tp <- cumsum(y[indx])
-  pp <- seq_along(x)
-  mean((tp/pp)[y[indx] == 1])
-}
 
 res_to_df <- function(res, filepaths, names = c("network", "algo", "struct", "N", "epf", "r")) {
   

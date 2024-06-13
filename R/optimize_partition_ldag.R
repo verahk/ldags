@@ -42,16 +42,15 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
   best_lab <- list()
   
   # check if all co-parent configs is already added to label
-  #lens <- lengths(labels)
-  #for (i in seq_along(nlev)[lens < (q/nlev-1)]) {
-  for (i in seq_along(nlev)) { 
+  for (i in seq_along(nlev)[lengths(labels) < q/nlev]) { 
     # find candidate  labels /  co-parent configs to add to label
     # - enumerate these contexts by the rows in the CPT where node i is zero
     contexts <- conf_enum[conf[, i] == 0]
     
     # remove contexts already in label on edge from i
     contexts <- contexts[match(contexts, labels[[i]], nomatch = 0) == 0]
-    
+  
+      
     # find the parts satisfied by each candidate label
     rows  <- outer(contexts, levels[[i]]*stride[i]+1, "+")
     parts <- array(partition[rows], dim(rows))
@@ -62,7 +61,7 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
     if (nlev[i] == 2) {
       redundant_labels <- parts[, 1] == parts[, 2]
     } else {
-      redundant_labels <- rowSums(parts[, -1] == parts[, 1]) == nlev[i]-1
+      redundant_labels <- rowSums(parts[, -1, drop = F] == parts[, 1]) == nlev[i]-1
     }
    
     
@@ -87,7 +86,7 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
    
     for (j in seq_along(contexts)) {
       
-      collapse <- parts[j, ]
+      collapse <- unique(parts[j, ])
       
       # compare score of collapsed vs separated parts
       tmp_counts <- colSums(part_counts[collapse,])
@@ -100,6 +99,10 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
         # check if regular 
         PP <- c(P[-collapse], list(unlist(P[collapse])))
         if (regular && !is_regular(PP,  nlev, stride))  next 
+        
+        if (sum(lengths(PP)) > sum(lengths(P))) {
+          print("breakpoint")
+        }
         
         best_partition <- PP
         best_diff <- diff
@@ -130,6 +133,7 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
                                    P, labels, conf, verbose))
     
   } else {
+    
     return(list(partition = P,
                 labels = labels,
                 counts = part_counts, 

@@ -27,10 +27,10 @@ run_sample_dags <- function(simpar, outdir = NULL, simid = "", verbose = F) {
   nlev <- sapply(bn, function(x) dim(x$prob)[1])
   
   # define scorepars
-  scorepar <- ldags:::define_scorepar(data, nlev, ess = 1, edgepf = edgepf, local_struct = struct)
+  scorepar <- ldags:::define_scorepar(data, nlev, ess = ess, edgepf = edgepf, local_struct = struct)
   
   # run MCMC
-  smpl <- ldags:::sample_dags(scorepar, init, sample, hardlimit = 4, verbose = verbose)
+  smpl <- ldags:::sample_dags(scorepar, init, sample, hardlimit = hardlimit, verbose = verbose)
   attr(smpl, "args") <- args 
   
   if (!is.null(outdir)) {

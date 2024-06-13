@@ -25,14 +25,14 @@ simpar <- expand.grid(list(bnname = c("LDAG10"),
                            init = c("hcskel"),
                            struct = c("ldag", "dag", "tree"),
                            sample = "partition", 
-                           edgepf = c(1, 2, 10**3),
+                           edgepf = c(1, 2, 10**1, 10**3, 10**4),
                            ess = 1,
                            hardlimit = 5, 
                            regular = c(FALSE),
                            N = c(300, 1000, 3000, 10000),
                            r = 1:30),
                       stringsAsFactors = F)
-indx <- simpar$regular == T & (simpar$edgepf > 1 | !simpar$struct == "tree")
+indx <-  (simpar$edgepf > 1 & simpar$struct == "dag")
 simpar <- simpar[!indx, ]
 
 
@@ -63,4 +63,5 @@ foreach(r = 1:nrow(simpar)) %dopar% run(simpar[r, ],
                                         verbose = T)
 stopCluster(cl)
 
+for (r in 1:nrow(simpar)) run(simpar[r, ], outdir, simid = tag, verbose = T)
 
