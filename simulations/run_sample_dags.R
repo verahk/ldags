@@ -11,7 +11,7 @@ run_sample_dags <- function(simpar, outdir = NULL, simid = "", verbose = F) {
   filepath <- paste0(outdir, filename)
   if (!is.null(outdir) && file.exists(filepath)) return(NULL)
   
-  if (verbose) cat(filename)
+  if (verbose) cat("\n", format(Sys.time(), "%Y%m%d %H%M%S"), filename)
 
   # load BN
   if (bnname == "LDAG10") {
@@ -35,7 +35,9 @@ run_sample_dags <- function(simpar, outdir = NULL, simid = "", verbose = F) {
   
   if (!is.null(outdir)) {
     saveRDS(smpl, filepath)
-    cat("output saved to ", filepath)
+    cat("\nruntime, ldags:::sample_dags: \n")
+    print(attr(smpl, "toc"))
+    cat("\noutput saved to ", filepath)
     return(NULL)
   } else {
     return(smpl)

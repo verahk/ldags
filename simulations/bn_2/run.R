@@ -1,6 +1,6 @@
 
 
-
+devtools::install_github("verahk/ldags")
 
 # prep ---- 
 library(ldags)
@@ -22,20 +22,20 @@ if (!dir.exists(logdir)) dir.create(logdir)
 nClusters <- 6
 
 # params ----
-simpar <- expand.grid(list(bnname = c("asia", "sachs", "child"), 
+simpar <- expand.grid(list(bnname = c("asia", "sachs"), 
                            init = c("hcskel"),
-                           struct = c("ldag", "dag", "tree"),
+                           struct = c("dag", "tree", "ldag"),
                            sample = "partition", 
-                           edgepf = 10**c(0:3),
+                           edgepf = 10**c(0, 1, 2),
                            ess = 1,
-                           hardlimit = 5, 
-                           regular = c(TRUE, FALSE),
+                           hardlimit = 4, 
+                           regular = c(FALSE, TRUE),
                            N = c(300, 1000, 3000, 10000),
                            r = 1:30),
                       stringsAsFactors = F)
 
 indx <-  with(simpar, 
-              (struct == "dag" & (edgepf != 1 | regular == FALSE)) | (struct != "dag" & edgepf == 1))
+              (struct == "dag" & !(edgepf == 1 & regular == TRUE)) | (struct != "dag" & (edgepf == 1 | regular == TRUE)))
 
 simpar <- simpar[!indx, ]
 

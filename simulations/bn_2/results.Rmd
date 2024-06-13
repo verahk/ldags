@@ -42,10 +42,10 @@ library(foreach)
 library(dplyr)
 library(ggplot2)
 
-simname <- "LDAG10_3"
+simname <- "bn_2"
 here::i_am(paste0("./simulations/", simname, "/results.Rmd"))
 
-bnname <- "LDAG10"
+bnnames <- c("asia", "sachs", "child")
 filepaths <- list.files(here::here("simulations", simname, "MCMCchains"), full.names = T)
 names <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
 
@@ -67,8 +67,9 @@ eval_files <- function(filepaths, bnname, prmethod, verbose = F) {
   res <- foreach(f = filepaths, 
                  .combine  = "rbind",
                  .packages = "Matrix") %dopar% eval_MCMCchain(f, dag, dmat, n, prmethod, seq_len(200), verbose = verbose)
+  
+  cbind(as.list(filepaths), res)
 }
-
 
 eval_MCMCchain <- function(f, dag, dmat, n, prmethod, burninsamples, verbose = T) {
   if (verbose) cat(f)
@@ -146,7 +147,7 @@ res_to_df <- function(res, filepaths, names = c("network", "init", "struct", "sa
 ```{r}
 plot_box_plot <- function(df, x, y, title = "", fill = "struct", facets = "algo+name~network+epf") {
   plot <- ggplot(df, aes(x = !! sym(x), y = !! sym(y), fill = !! sym(fill))) +
-    facet_grid(as.formula(facets), scales = "free") +
+    facet_grid(as.formula(facets), scales = "free", space = "free") +
     geom_boxplot() +
     ggtitle(title) +
     theme(legend.position = "bottom")
@@ -172,6 +173,12 @@ plot_prec_recall_step <- function(df, title = "", facets = "algo+struct+epf~netw
                color = "blue", size = .5) +
     ggtitle(title)
 }
+
+
+
+plot_res <- function(filepaths) {
+  
+}
 ```
 
 
@@ -181,17 +188,27 @@ cl <- makeCluster(5, "SOCK", outfile = "")
 export <- as.vector(lsf.str(envir = .GlobalEnv))
 clusterExport(cl, export)
 registerDoSNOW(cl)
-  
-res <- eval_files(filepaths, bnname, prmethod = "noise", verbose = T)
+
+res <- list()
+for (bnname in bnnames) {
+  indx <- grepl(bnname, filepaths)
+  stopifnot(any(indx))
+  res[[bnname]] <-  eval_files(filepaths[indx], bnname, prmethod = "noise", verbose = T)
+}
+
+
 
 ```
 
 Count number of runs for each setting>
 ```{r}
+
 df <- res_to_df(as.list(seq_along(filepaths)), filepaths, names)
 head(df)
 tidyr::pivot_wider(aggregate(rep(1, nrow(df)), df[, names[!names == "r"]], sum), 
-                   names_from = "struct", values_from = "x")
+                   names_from = "struct", values_from = "x") %>%  print(n = 100)
+
+
 ```
 
 
@@ -201,12 +218,17 @@ tidyr::pivot_wider(aggregate(rep(1, nrow(df)), df[, names[!names == "r"]], sum),
 # AVERAGE PRECISION, TRUE AND FALSE POSITIVES 
 Across edge penalty `epf` and regularity `reg`:
 ```{r}
-df <- res_to_df(res[, 2], filepaths, names)
+for (bnname in bnnames) {
+  df <- res_to_df(res[[bnname]][, "rates"], unlist(res[[bnname]][, 1]), names)
 
-facets <- "init+sample+N~struct"
-plot_box_plot(df, x = "epf", y = "avgppv", fill = "regular", facets = facets) + ylim(0, 1)
-plot_box_plot(df, x = "epf", y = "TPR", fill = "regular", facets = facets) + ylim(0, 1)
-plot_box_plot(df, x = "epf", y = "FPR", fill = "regular", facets = facets) + ylim(0, 1)
+  facets <- "init+sample+N~network+struct"
+  for (y in c("avgppv", "TPR", "FPR")) {
+    plot <- plot_box_plot(df, x = "epf", y = y, fill = "regular", facets = facets) + ylim(0, 1) 
+    print(plot)
+  }
+
+}
+
 ```
 
 
@@ -227,54 +249,11 @@ for (x in unique(df$init)) {
 }
 ```
 
-# EDGE PROBABILITIES ---- 
-```{r}
-indx <- grepl("N1000", filepaths)
-df <- res_to_df(res[indx, 1], filepaths[indx], names)
-df <- tidyr:::pivot_longer(df, -all_of(names))
 
-bn <- readRDS(here::here("./data/LDAG10.rds"))
-n <- 10
-df$y <- (as.numeric(df$name)-1)%/%(n-1) +1
-df$x <- rep(.row(c(n, n))[!diag(n) == 1], sum(indx))
-
-df_agg <- group_by(df, across(c(names[-length(names)], "x", "y"))) %>% 
-  summarize(mean = mean(value))
-df_agg$cpdag <- bnlearn::amat(bnlearn::cpdag(bn))[cbind(df_agg$x, df_agg$y)]
-df_agg$true <- bnlearn::amat(bn)[cbind(df_agg$x, df_agg$y)]
-
-
-df_agg %>% 
-  filter(epf == "epf10", regular == "reg1") %>% 
-ggplot(aes(as.factor(x), as.factor(y), 
-                   size = mean, 
-                   color = interaction(true, cpdag))) +
-  facet_grid(epf+regular~struct) +
-  geom_point() +
-  scale_y_discrete(limits=rev) 
-
-df_agg %>% 
-  filter(struct != "dag") %>% 
-  tidyr::pivot_wider(names_from = "regular", values_from = "mean") %>% 
-  ggplot(aes(reg0, reg1, color = interaction(true, cpdag))) + 
-    facet_grid(epf~struct) +
-    geom_point() +
-    geom_abline(slope = 1, intercept = 0)
-
-df_agg %>% 
-  filter(regular == "reg1") %>% 
-  tidyr::pivot_wider(names_from = "struct", values_from = "mean") %>% 
-  filter(!is.na(dag)) %>% 
-  tidyr::pivot_longer(c("ldag", "tree"), names_to = "struct") %>% 
-  ggplot(aes(dag, value, color = interaction(true, cpdag))) + 
-    facet_grid(epf~struct) +
-    geom_point() +
-    geom_abline(slope = 1, intercept = 0)
-
-```
 
 # RUN TIMES 
 ```{r}
+
 df <- res_to_df(res[, 4], filepaths, names)
 facets <- "name~init+regular+epf+sample"
 
@@ -283,5 +262,9 @@ for (x in unique(df$init)) {
   plot <- plot_box_plot(df[indx, ],  x = "N", y = "tmp", fill = "struct", facets = facets)
   print(plot)
 }
+```
+
+```{r}
+stopCluster(cl)
 ```
 

@@ -35,7 +35,6 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
   part_counts <- rowsum(counts, partition, reorder = T)
   part_scores <- famscore_bdeu_byrow(part_counts, ess, r, q, part_size)
   
-  
   # search for label that improves score the most 
   keep_climb <- FALSE
   best_diff <- min_score_improv
@@ -83,7 +82,7 @@ optimize_partition_ldag <- function(counts, levels, ess, regular,
     # - evaluate only the first as candidate context
     # - add redudant labels in next call to the function
    # dups  <- duplicated(lapply(split(parts, .row(dim(parts))), tabulate)) 
-   
+    
     for (j in seq_along(contexts)) {
       
       collapse <- unique(parts[j, ])

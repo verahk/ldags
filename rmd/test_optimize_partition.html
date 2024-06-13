@@ -366,7 +366,7 @@ display: none;
 <pre class="r"><code>library(pcalg) # for as(adjmat, &quot;graphNEL&quot;)
 library(ldags)
 here::i_am(&quot;./rmd/test_optimize_partition.Rmd&quot;)</code></pre>
-<pre><code>## here() starts at C:/Users/verak/OneDrive - Universitetet i Oslo/Documents/git/personal/ldags</code></pre>
+<pre><code>## here() starts at /mn/sarpanitu/ansatte-u6/verahk/Documents/git/ldags</code></pre>
 <div id="test-optmization-routines" class="section level2">
 <h2>Test optmization routines</h2>
 <p>Write a routine that, for a given frequency table, compares the
@@ -376,12 +376,12 @@ partitions and local scores resulting from each optimization routine
   df &lt;- cbind(expand.grid(levels), n = counts)
   scores &lt;- setNames(numeric(length(methods)), methods)
   for (method in methods) {
-    res &lt;- ldags:::optimize_partition(counts, levels, ess = 1, method, regular = regular)
+    res &lt;- optimize_partition(counts, levels, ess = 1, method, regular = regular)
     df[[method]] &lt;- get_parts(res$partition)
     scores[method] &lt;- sum(res$scores)
   }
   df[[&quot;none&quot;]] &lt;- seq_len(nrow(counts))
-  scores[&quot;none&quot;] &lt;- sum(compute_local_bdeu_score(counts, 1, ncol(counts), nrow(counts), s = 1))
+  scores[&quot;none&quot;] &lt;- sum(ldags:::compute_local_bdeu_score_from_counts(counts, 1, ncol(counts), nrow(counts), s = 1))
   return(list(df, scores))
 }</code></pre>
 <div id="binary-split" class="section level3">
@@ -394,14 +394,14 @@ counts &lt;- cbind(10, c(10, 10, 100, 100))
 tester(counts, levels)</code></pre>
 <pre><code>## [[1]]
 ##   Var1 Var2 n.1 n.2 tree ldag part none
-## 1    0    0  10  10    1    1    1    1
+## 1    0    0  10  10    1    2    2    1
 ## 2    1    0  10  10    1    2    2    2
-## 3    0    1  10 100    2    3    3    3
-## 4    1    1  10 100    2    3    3    4
+## 3    0    1  10 100    2    1    1    3
+## 4    1    1  10 100    2    1    1    4
 ## 
 ## [[2]]
 ##      tree      ldag      part      none 
-## -100.4871 -103.5120 -103.5120 -106.8413</code></pre>
+## -100.4871 -100.4871 -100.4871 -106.8413</code></pre>
 </div>
 <div id="v-structure" class="section level3">
 <h3>V-structure</h3>
@@ -419,16 +419,16 @@ tester(counts, levels)</code></pre>
 ## 
 ## [[2]]
 ##      tree      ldag      part      none 
-## -118.0866 -120.3896 -120.3896 -126.9286</code></pre>
+## -127.5402 -120.3896 -120.3896 -126.9286</code></pre>
 <p>The <code>tree</code>-partition returns only one region, i.e. the
 no-parent CPT, as the score is not improved by splitting on any of the
 parent variables for the given frequency table.</p>
 <pre class="r"><code>cat(&quot;Score, P(Y|X1, X2):&quot;)
-compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1)
+ldags:::compute_local_bdeu_score_from_counts(counts, ess = 1, r = 2, q = 4, s = 1)
 cat(&quot;Score, P(Y|X2):&quot;)
-compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
+ldags:::compute_local_bdeu_score_from_counts(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat(&quot;Score P(Y):&quot;)
-compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
+ldags:::compute_local_bdeu_score_from_counts(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
 <pre><code>## Score, P(Y|X1, X2):[1] -126.9286
 ## Score, P(Y|X2):[1] -128.9997
 ## Score P(Y):[1] -127.5402</code></pre>
@@ -439,18 +439,18 @@ implicitly encode any conditional independencies.</p>
 <pre><code>## [[1]]
 ##   Var1 Var2 n.1 n.2 tree ldag part none
 ## 1    0    0  10  10    1    1    1    1
-## 2    1    0  10 100    1    2    2    2
-## 3    0    1  10 100    1    2    2    3
-## 4    1    1  10 100    1    2    2    4
+## 2    1    0  10 100    3    2    2    2
+## 3    0    1  10 100    2    2    2    3
+## 4    1    1  10 100    4    2    2    4
 ## 
 ## [[2]]
 ##      tree      ldag      part      none 
-## -118.0866 -120.3896 -120.3896 -126.9286</code></pre>
+## -126.9286 -120.3896 -120.3896 -126.9286</code></pre>
 <p>In the following example, also the <code>tree</code> procedure
 captures the correct local structure.</p>
 <pre class="r"><code>levels &lt;- rep(list(0:1), 2)
 counts &lt;- cbind(c(100, 10, 10, 10), c(10, 100, 100, 100))
-tester(counts, levels)</code></pre>
+tester(counts, levels, regular = F)</code></pre>
 <pre><code>## [[1]]
 ##   Var1 Var2 n.1 n.2 tree ldag part none
 ## 1    0    0 100  10    1    1    1    1
@@ -462,11 +462,11 @@ tester(counts, levels)</code></pre>
 ##      tree      ldag      part      none 
 ## -143.6865 -140.4769 -140.4769 -147.0158</code></pre>
 <pre class="r"><code>cat(&quot;Score, P(Y|X1, X2):&quot;)
-sum(compute_local_bdeu_score(counts, ess = 1, r = 2, q = 4, s = 1))
+ldags:::compute_local_bdeu_score_from_counts(counts, ess = 1, r = 2, q = 4, s = 1)
 cat(&quot;Score, P(Y|X2):&quot;)
-sum(compute_local_bdeu_score(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2)))
+ldags:::compute_local_bdeu_score_from_counts(rowsum(counts, c(1, 1, 2, 2)), ess = 1, r = 2, q = 4, s = c(2, 2))
 cat(&quot;Score P(Y):&quot;)
-compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
+ldags:::compute_local_bdeu_score_from_counts(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 4)</code></pre>
 <pre><code>## Score, P(Y|X1, X2):[1] -147.0158
 ## Score, P(Y|X2):[1] -226.106
 ## Score P(Y):[1] -270.3338</code></pre>
@@ -475,17 +475,17 @@ compute_local_bdeu_score(matrix(colSums(counts), 1), ess = 1, r = 2, q = 4, s = 
 <div id="compare-optimized-partitions-and-search-through-labels-routine-coincide" class="section level1">
 <h1>Compare optimized partitions and search-through-labels routine
 coincide</h1>
-<pre class="r"><code>levels &lt;- rep(list(0:1), 3)
+<pre class="r"><code>levels &lt;- rep(list(0:1), 4)
 nlev &lt;- lengths(levels)
 ess &lt;- 1
 
 for (i in 1:100) {
   #cat(&quot;\niter:&quot;, i, &quot;\n&quot;)
-  counts &lt;- matrix(rgamma(2**(3+1), shape = 1), ncol = 2)
+  counts &lt;- matrix(rgamma(2**(length(levels)+1), shape = 1), ncol = 2)
   fits &lt;- list()
 
-  fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = F, F)
-  fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = F, F)
+  fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = T, F)
+  fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = T, F)
 
   partitions &lt;- sapply(lapply(fits, &quot;[[&quot;, &quot;partition&quot;), get_parts)
   
@@ -495,9 +495,9 @@ for (i in 1:100) {
     cbind(expand.grid(levels), partitions)
     
     cat(&quot;\npart:&quot;)
-    fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = F, T)
+    fits$part &lt;- optimize_partition(counts, levels, ess, &quot;part&quot;, regular = T, T)
     cat(&quot;\nldag:&quot;)
-    fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = F, T)
+    fits$ldag &lt;- optimize_partition(counts, levels, ess, &quot;ldag&quot;, regular = T, T)
     
     is_CSI_consistent(fits$part$partition, nlev)
     is_regular(fits$part$partition, nlev)
@@ -507,6 +507,9 @@ for (i in 1:100) {
     break
   }
 }</code></pre>
+</div>
+<div id="fit-to-large-data" class="section level1">
+<h1>Fit to large data</h1>
 <pre class="r"><code>bn   &lt;- readRDS(here::here(&quot;./data/LDAG10.rds&quot;))
 dag  &lt;- bnlearn::amat(bn)
 nlev &lt;- rep(2, 10)  
@@ -516,21 +519,21 @@ bn &lt;- ldags:::example_bn(&quot;LDAG10&quot;)
 data &lt;- bida:::sample_data_from_bn(bn, 10**6)
 
 for (i in seq_along(bn)) {
-  par &lt;- which(dag[, i] == 1)
-  if (length(par) &lt; 2) next 
+  pa &lt;- which(dag[, i] == 1)
+  if (length(pa) &lt; 2) next 
   
   parts  &lt;- list()
-  cpt &lt;- aperm(bn[[i]]$prob, c(seq_along(par)+1, 1))
-  dim(cpt) &lt;- c(prod(nlev[par]), nlev[i]) 
+  cpt &lt;- aperm(bn[[i]]$prob, c(seq_along(pa)+1, 1))
+  dim(cpt) &lt;- c(prod(nlev[pa]), nlev[i]) 
   parts$true &lt;- match(cpt[, 1], cpt[, 1]) 
   
-  counts &lt;- compute_freq_table(data, nlev, i, par)
-  fit    &lt;- optimize_partition(counts, levels[par], 1, &quot;tree&quot;, verbose = F)
+  counts &lt;- compute_freq_table(data, nlev, i, pa)
+  fit    &lt;- optimize_partition(counts, levels[pa], 1, &quot;tree&quot;, regular = T, verbose = F)
   parts$tree  &lt;- get_parts(fit$partition)
   
-  fit    &lt;- optimize_partition(counts, levels[par], 1, &quot;ldag&quot;, verbose = F)
+  fit    &lt;- optimize_partition(counts, levels[pa], 1, &quot;ldag&quot;, regular = T, verbose = F)
   parts$ldag  &lt;- get_parts(fit$partition)
-  
+
   cat(&quot;\nVariable:&quot;, i, 
       &quot;True length:&quot;, length(unique(parts$true)), 
       &quot;True partition:&quot;, parts$true, &quot;\n&quot;)
@@ -542,12 +545,12 @@ for (i in seq_along(bn)) {
 <pre><code>## 
 ## Variable: 3 True length: 3 True partition: 1 2 1 4 
 ## $tree
-## 1 2 3 
-## 1 1 2 
+## 1 2 3 4 
+## 1 1 1 1 
 ## 
 ## $ldag
-## 1 2 
-## 1 2 
+## 1 2 3 
+## 1 1 1 
 ## 
 ## 
 ## Variable: 4 True length: 3 True partition: 1 2 3 3 
@@ -572,12 +575,12 @@ for (i in seq_along(bn)) {
 ## 
 ## Variable: 7 True length: 9 True partition: 1 2 3 4 5 6 4 4 9 4 11 4 13 4 13 4 
 ## $tree
-##  1  2  3  4  5  6  7  8  9 10 11 12 
-##  1  1  1  1  1  1  2  1  1  1  1  1 
+##  1  2  3  4  5  6  7  8  9 10 11 
+##  1  1  1  1  1  1  1  1  1  1  1 
 ## 
 ## $ldag
-## 1 2 3 4 5 6 7 8 
-## 1 1 1 1 1 1 1 2 
+## 1 2 3 4 5 6 7 8 9 
+## 1 1 1 1 1 1 1 1 1 
 ## 
 ## 
 ## Variable: 8 True length: 4 True partition: 1 2 3 4 
@@ -606,33 +609,8 @@ for (i in seq_along(bn)) {
 ## 1 1 1 1 1 1 1 1 1 
 ## 
 ## $ldag
-## 1 2 3 4 5 6 7 8 
-## 1 1 1 1 1 1 2 1</code></pre>
-<pre class="r"><code>i &lt;- 3
-par &lt;- which(dag[, i] == 1)
-counts &lt;- compute_freq_table(data, nlev, i, par)
-microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, &quot;part&quot;),
-                               optimize_partition(counts, levels[par], 1, &quot;ldag&quot;))
-
-i &lt;- 10
-par &lt;- which(dag[, i] == 1)
-counts &lt;- compute_freq_table(data, nlev, i, par)
-microbenchmark::microbenchmark(optimize_partition(counts, levels[par], 1, &quot;part&quot;),
-                               optimize_partition(counts, levels[par], 1, &quot;ldag&quot;))</code></pre>
-<pre><code>## Unit: microseconds
-##                                                expr   min    lq    mean median
-##  optimize_partition(counts, levels[par], 1, &quot;part&quot;) 322.5 335.0 360.402 341.40
-##  optimize_partition(counts, levels[par], 1, &quot;ldag&quot;) 574.6 589.1 654.399 605.25
-##      uq    max neval cld
-##  358.50  694.2   100  a 
-##  646.35 3493.7   100   b
-## Unit: milliseconds
-##                                                expr    min      lq     mean
-##  optimize_partition(counts, levels[par], 1, &quot;part&quot;) 4.8757 4.99630 5.357428
-##  optimize_partition(counts, levels[par], 1, &quot;ldag&quot;) 4.7400 4.86175 5.045578
-##   median      uq   max neval cld
-##  5.08535 5.18345 9.404   100  a 
-##  4.95540 5.03725 8.596   100   b</code></pre>
+## 1 2 3 4 5 6 7 8 9 
+## 1 1 1 1 1 1 1 1 1</code></pre>
 </div>
 
 
