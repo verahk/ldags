@@ -1,6 +1,6 @@
 
 
-#' Title
+#' Compute local bdeu score 
 #'
 #' @param data 
 #' @param levels 
@@ -22,19 +22,7 @@
 #' @export
 #'
 #' @examples
-#' 
-#' levels <- rep(list(0:1), 3)
-#' nlev   <- lengths(levels)
-#' data   <- sapply(levels, sample, size = 10, replace = TRUE)
-#' 
-#' # no parent
-#' compute_local_bdeu_score(data, levels, nlev, 1, integer(0))
-#' 
-#' # single parent
-#' compute_local_bdeu_score(data, levels, nlev, 1, 2)
-#' 
-#' # multiple parents
-#' compute_local_bdeu_score(data, levels, nlev, 1, 2:3, method = "ldag")
+
 
 compute_local_bdeu_score <- function(data, levels, nlev = lengths(levels), j, parentnodes, ess = 1, method = NULL, ...) {
   counts <- compute_freq_table(data, nlev, j, parentnodes)
@@ -44,22 +32,18 @@ compute_local_bdeu_score <- function(data, levels, nlev = lengths(levels), j, pa
     attr(score, "structure") <- struct
     return(score)
   } else {
-    compute_local_bdeu_score_from_counts(counts, ess)
+    sum(famscore_bdeu_byrow(counts, ess))
   }
-}
-
-compute_local_bdeu_score_from_counts <- function(counts, ess, r = ncol(counts), q = nrow(counts), s = 1) {
-  sum(famscore_bdeu_byrow(counts, ess, r, q, s))
 }
 
 compute_local_bdeu_score_from_cpt <- function(cpt, ess) {
   if (is.null(cpt$partition)) {
-    compute_local_bdeu_score_from_counts(cpt$counts, ess = ess)
+    sum(famscore_bdeu_byrow(counts, ess))
   } else {
     nlev <- lengths(cpt$levels)
     n <- length(nlev)
     s <- lengths(cpt$partition)
-    compute_local_bdeu_score_from_counts(cpt$counts, ess = ess, r = nlev[n], q = prod(nlev[-n]), s = s)
+    sum(famscore_bdeu_byrow(cpt$counts, ess = ess, r = nlev[n], q = prod(nlev[-n]), s = s))
   }
 }
 

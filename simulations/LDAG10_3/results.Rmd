@@ -109,9 +109,17 @@ eval_MCMCchain <- function(f, dag, dmat, n, prmethod, burninsamples, verbose = T
   #res[2, 3] <- compute_avgppv(ancp, dmat)
   res[2, 3] <- pr$avgppv 
   
+  # parent set size 
+  ps <- bida:::parent_support_from_dags(dags, support)
+  wmean <- mapply(function(m, w) ncol(m)-rowSums(is.na(m))%*%w,
+                  m = ps$sets, 
+                  w = ps$support)
+  #stopifnot(abs(wmean[5] - sum(sapply(dags, function(g) sum(g[, 5]))*support)) < 10**-10)
+  
   list(edgep = edgep, 
        rates = res, 
        pr = pr$df,
+       npar = wmean,
        toc = as.matrix(attr(MCMCchain, "toc")))
   
 }
@@ -199,12 +207,23 @@ tidyr::pivot_wider(aggregate(rep(1, nrow(df)), df[, names[!names == "r"]], sum),
 
 
 
+# Parent set size 
+Compare the average number of parents of a node in the sampled DAGs. 
+The box plots shows the distribution of over nodes and simulation runs. 
+```{r}
+# Parent set size -----
+df <- res_to_df(res[, "npar"], filepaths, names)
+df <- tidyr:::pivot_longer(df, names(df)[!names(df) %in% names], values_to = "avg_npar")
+facets <- "init+sample+N~struct"
+plot_box_plot(df, x = "epf", y = "avg_npar", fill = "regular", facets = facets) 
+```
+
 
 
 # AVERAGE PRECISION, TRUE AND FALSE POSITIVES 
 Across edge penalty `epf` and regularity `reg`:
 ```{r}
-df <- res_to_df(res[, 2], filepaths, names)
+df <- res_to_df(res[, "rates"], filepaths, names)
 
 facets <- "init+sample+N~struct"
 plot_box_plot(df, x = "epf", y = "avgppv", fill = "regular", facets = facets) + ylim(0, 1)
@@ -214,11 +233,11 @@ plot_box_plot(df, x = "epf", y = "FPR", fill = "regular", facets = facets) + yli
 
 
 
-# PRECISION RECALL CURVES ---
+# PRECISION RECALL CURVES 
 ```{r PR-curves}
 
 indx <- grepl("_epf1_|_epf10_|_epf100_", filepaths) & grepl("_N1000_", filepaths)
-df <- res_to_df(res[indx, 3], filepaths[indx], names)
+df <- res_to_df(res[indx, "pr"], filepaths[indx], names)
 
 for (x in unique(df$init)) {
 
@@ -230,10 +249,14 @@ for (x in unique(df$init)) {
 }
 ```
 
-# EDGE PROBABILITIES ---- 
+# EDGE PROBABILITIES 
+Check if there are particular edges that the local-structure-routines handle differently,
+by comparing the posterior means of each edge. The posterior means are averaged over all 
+simulation runs for every simulation setting. 
+
 ```{r}
 indx <- grepl("N1000", filepaths)
-df <- res_to_df(res[indx, 1], filepaths[indx], names)
+df <- res_to_df(res[indx, "edgep"], filepaths[indx], names)
 df <- tidyr:::pivot_longer(df, -all_of(names))
 
 bn <- readRDS(here::here("./data/LDAG10.rds"))
@@ -278,7 +301,7 @@ df_agg %>%
 
 # RUN TIMES 
 ```{r}
-df <- res_to_df(res[, 4], filepaths, names)
+df <- res_to_df(res[, "toc"], filepaths, names)
 facets <- "name~init+regular+epf+sample"
 
 for (x in unique(df$init)) {

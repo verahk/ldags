@@ -30,23 +30,24 @@ rand_bn <- function(dag, partitions = NULL, nlev = rep(2, ncol(dag)), alpha = 1)
   
   # sample cpts
   cpts <- vector("list", ncol(dag))
-  names(cpts) <- vars
-  for (j in seq_along(vars)) {
-    pa <- which(dag[, j] == 1)
-    r <- nlev[j]
+  names(cpts) <- names(nlev) <- vars
+  for (v in vars) {
+    pa <- vars[which(dag[, v] == 1)]
+    r  <- nlev[v]
     
-    if (is.null(partitions[[j]])) {
+    if (length(pa) == 0) {
+      p <- bida:::rDirichlet(1, rep(alpha, r), r)
+    } else if (is.null(partitions[[v]])) {
       q <- prod(nlev[pa])
       p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)
     } else {
-      q <- length((partitions[[j]]))
-      indx <- get_parts(partitions[[j]])
+      q <- length((partitions[[v]]))
+      indx <- get_parts(partitions[[v]])
       p <- replicate(q, bida:::rDirichlet(1, rep(alpha, r), r), simplify = T)[, indx]
     }
-    dim(p) <- nlev[c(j, pa)]
-    dimnames(p) <- setNames(vector("list", 1+length(pa)), vars[c(j, pa)])
-    
-    cpts[[j]] <- p
+    dim(p) <- nlev[c(v, pa)]
+    dimnames(p) <- lapply(dim(p)-1, seq.int, from = 0)
+    cpts[[v]] <- p
   }
 
   # return bn.fit object

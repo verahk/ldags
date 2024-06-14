@@ -63,6 +63,7 @@ example_bn <- function(name) {
     labels[[9, 10]] <- rbind(c(1, NA, NA))
     
     partitions <- vector("list", ncol(dag))
+    names(partitions) <- colnames(dag)
     for (i in 1:ncol(dag)) {
       pa   <- which(dag[, i] == 1)
       if (length(pa) > 1) {

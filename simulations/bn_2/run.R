@@ -22,11 +22,11 @@ if (!dir.exists(logdir)) dir.create(logdir)
 nClusters <- 6
 
 # params ----
-simpar <- expand.grid(list(bnname = c("asia", "sachs"), 
+simpar <- expand.grid(list(bnname = c("child"), 
                            init = c("hcskel"),
                            struct = c("dag", "tree", "ldag"),
                            sample = "partition", 
-                           edgepf = 10**c(0, 1, 2),
+                           edgepf = 10**c(0, 1, 2, 3),
                            ess = 1,
                            hardlimit = 4, 
                            regular = c(FALSE, TRUE),
@@ -35,7 +35,7 @@ simpar <- expand.grid(list(bnname = c("asia", "sachs"),
                       stringsAsFactors = F)
 
 indx <-  with(simpar, 
-              (struct == "dag" & !(edgepf == 1 & regular == TRUE)) | (struct != "dag" & (edgepf == 1 | regular == TRUE)))
+              (struct == "dag" & !(edgepf == 1 & regular == TRUE)) | (struct == "tree" & (edgepf == 1 | regular == TRUE)) | (struct == "ldag" & (edgepf < 10**2 | regular == TRUE)))
 
 simpar <- simpar[!indx, ]
 

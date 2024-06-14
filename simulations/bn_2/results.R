@@ -8,10 +8,10 @@ simname <- "bn_2"
 bnnames <- c("asia", "sachs", "child")
 
 indir  <- paste0("./simulations/", simname, "/MCMCchains")
-outdir <- paste0("./simulations/", simname, "/")
+outdir <- paste0("./simulations/", simname, "/results/")
 names  <- c("network", "init", "struct", "sample", "epf",  "regular", "N", "r")
 
-
+dir.create(outdir)
 
 eval_files <- function(filepaths, bnname, prmethod, verbose = F) {
   
@@ -83,7 +83,6 @@ eval_MCMCchain <- function(f, dag, dmat, n, prmethod, burninsamples, verbose = T
   
 }
 
-
 res_to_df <- function(res, filepaths, names = c("network", "init", "struct", "sample", "epf", "regular", "N", 
 "r")) {
   
@@ -141,9 +140,8 @@ plot_prec_recall_step <- function(df, title = "", facets = "algo+struct+epf~netw
 
 
 
-plots_to_file <- function(res, filepaths, names, tag, outdir, outfile = NULL, print = TRUE) {
-  
-  if (!is.null(outdir) && is.null(outfile)) outfile <- paste0(outdir, "results_", tag, ".md") 
+plots_to_file <- function(res, filepaths, names, tag, outdir, outfile,  print = TRUE) {
+
   
   plotter <- function(plot, filepath, outfile, print, ...) {
     ggsave(filepath, plot, ...)
@@ -153,24 +151,27 @@ plots_to_file <- function(res, filepaths, names, tag, outdir, outfile = NULL, pr
   
   facets <- "init+sample+N~network+struct"
   
-  # Plot rates 
+  # Parent set size -----
+  cat("\n\n# PARENT SET SIZE\n", file = outfile, append = T)
+  df <- res_to_df(res[, "npar"], filepaths, names)
+  df <- tidyr:::pivot_longer(df, names(df)[!names(df) %in% names], values_to = "avg_npar")
+  y  <- "avg_npar"
+  plot <- plot_box_plot(df, x = "epf", y = y, fill = "regular", facets = facets) 
+  plotter(plot, outfile = outfile, print = print, 
+          filepath = here::here(paste0(outdir, y, "_", tag, ".png")))
+  
+  # Plot rates ----
   df <- res_to_df(res[, "rates"], filepaths, names)
   for (y in c("avgppv", "TPR", "FPR")) {
+    cat("\n\n#", ifelse(y == "avgppv", "AVERAGE PRECISION", y), "\n",
+        file = outfile, append = T)
     plot <- plot_box_plot(df, x = "epf", y = y, fill = "regular", facets = facets) + ylim(0, 1) 
     plotter(plot, outfile = outfile, print = print, 
             filepath = here::here(paste0(outdir, y, "_", tag, ".png")))
   }
   
-  # Parent set size 
-  df <- res_to_df(res[, "npar"], filepaths, names)
-  df <- tidyr:::pivot_longer(df, names(df)[!names(df) %in% names], names_to = "avg_npar")
-
-  plot <- plot_box_plot(df, x = "epf", y = "avg_npar", fill = "regular", facets = facets) 
-  plotter(plot, outfile = outfile, print = print, 
-          filepath = here::here(paste0(outdir, y, "_", tag, ".png")))
-  
-  
-  # Plot prec-recall curves 
+  # Plot prec-recall curves ----
+  cat("\n\n# PRECISION RECALL \n", file = outfile, append = T)
   indx <- grepl("_epf1_|_epf10_|_epf100_", filepaths) 
   df <- res_to_df(res[indx, "pr"], filepaths[indx], names)
   
@@ -187,11 +188,12 @@ plots_to_file <- function(res, filepaths, names, tag, outdir, outfile = NULL, pr
 
   
   # Plot running times 
+  cat("\n# RUNTIMES \n", file = outfile, append = T)
   df <- res_to_df(res[, "toc"], filepaths, names)
   df_agg <- aggregate(df$tmp, df[, c("network", "init", "struct", "sample", "epf", "regular", "N", "name")], mean)
   
   plot <- ggplot(df_agg, aes(N, y = x, fill = name)) +
-    facet_grid(init+regular+epf+sample~network) +
+    facet_grid(init+epf+sample~network+struct+regular) +
     geom_col()
   plotter(plot, outfile = outfile, print = print, 
           filepath = here::here(outdir, paste("avgruntimes_", tag, ".png", sep = "")))
@@ -221,16 +223,13 @@ for (bnname in bnnames) {
   if (length(filepaths) == 0) next 
   
   tag <- paste0(simname, "_", bnname)
+  outfile <- paste0(outdir, "results_", tag, ".md") 
+  file.remove(outfile)
   res <-  eval_files(filepaths, bnname, prmethod = "noise", verbose = T)
-  plots_to_file(res, filepaths, names, tag, outdir = outdir)
+  plots_to_file(res, filepaths, names, tag, outdir = outdir, outfile = outfile)
 }
-
-
-
-
-
-
-
-
-
 stopCluster(cl)
+
+
+
+
